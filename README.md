@@ -7,6 +7,7 @@ The project is designed to be production‑ready out of the box.  It includes a 
 ## Features
 
 - **Hero section with animation**: A striking hero with subtle radial gradients introduces the HypeWidget™ and lists key benefits.  The call‑to‑action buttons include magnetic hover effects and trigger a confetti burst on add to cart.
+- **Custom desktop cursor & scroll effects**: A bespoke cursor, blur‑on‑scroll header and fade‑in sections add extra visual polish.
 - **Product variations**: Size (S–XL) and colour (Black, White, Blue, Mint) selectors with price modifiers.  Disabled states appear when a variant is out of stock.
 - **Cart & checkout**: A slide‑in cart drawer with quantity controls, subtotal calculation, and a button to initiate Stripe Checkout.  A success and cancel page handle post‑purchase redirects.
 - **Social proof**: Built‑in review component and testimonials, plus trust badges and a rating summary.
@@ -48,7 +49,7 @@ The project is designed to be production‑ready out of the box.  It includes a 
    npm run dev
    ```
 
-   Visit `http://localhost:3000` to view your storefront.  Add a product to the cart and click **Checkout** to be redirected to the Stripe hosted checkout.  After completing payment, you will be sent to `/success`.
+   Visit `http://localhost:3000` to view your storefront.  Add a product to the cart and click **Checkout** to be redirected to the Stripe-hosted checkout.  After completing payment, you will be sent to `/success`.
 
 6. **Access the admin dashboard**
 
@@ -74,7 +75,7 @@ The application relies on the following environment variables.  All variables ar
 - **Styling**: The design uses Tailwind CSS with a dark theme and custom brand colours matching the original ViralGoods prototype.  You can customise colours, fonts and spacing in `tailwind.config.ts`.
 - **Animations**: Framer Motion powers subtle interactions such as the product card tilt and confetti bursts when items are added to the cart.  The `Hero` component uses radial gradient backgrounds animated via CSS keyframes.
 - **Data fetching**: Product data is loaded via server components.  API routes return JSON for the product list, checkout session and admin actions.  SWR or ISR can be added for caching.
-- **Accessibility & performance**: Interactive elements have descriptive ARIA labels, focus indicators and keyboard support.  Images are lazy‑loaded via the Next.js `<Image>` component.  A simple Google Analytics placeholder is provided in `analytics.ts` and can be wired up later.
+- **Accessibility & performance**: Interactive elements have descriptive ARIA labels, focus indicators and keyboard support.  Images are lazy‑loaded via the Next.js `<Image>` component.  A simple placeholder for Google Analytics can be added later.
 
 ## Deployment
 
