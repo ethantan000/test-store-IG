@@ -9,9 +9,7 @@ import type { Config } from 'tailwindcss';
  * match your own branding.
  */
 const config: Config = {
-  content: [
-    './src/**/*.{js,ts,jsx,tsx}',
-  ],
+  content: ['./**/*.{js,ts,jsx,tsx}'],
   darkMode: 'class',
   theme: {
     extend: {
