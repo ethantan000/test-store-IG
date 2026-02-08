@@ -1,147 +1,164 @@
-# ViralGoods Storefront
+# ViralGoods - Full-Stack E-Commerce Storefront
 
-This repository contains the source code for **ViralGoods**, a full‑stack e‑commerce landing page built with **Next.js 13**, **TypeScript**, **Tailwind CSS**, **Prisma**, and **Stripe**.  It provides a high‑converting, mobile‑first shopping experience for the **HypeWidget™** — a fun, giftable gadget that looks great on your desk and even better in your videos.
+A production-ready full-stack e-commerce platform for dropshipping, built with **Next.js 13**, **TypeScript**, **Tailwind CSS**, **Node.js/Express**, and **MongoDB**. Designed for Instagram ad-driven traffic with a blue/purple premium aesthetic.
 
-The project is designed to be production‑ready out of the box.  It includes a product gallery with 3D tilt animation, a variant selector with size and colour options, a mini cart with toast notifications, a Stripe‑powered checkout flow, review and FAQ sections, and a minimal admin dashboard.  All data is stored in a SQLite database via Prisma with a seed script that populates one product and multiple variants.
+## Architecture
+
+```
+viralgoods/
+├── app/                    # Next.js 13 App Router pages
+│   ├── page.tsx            # Landing page (hero, categories, featured products)
+│   ├── products/           # Product catalog & detail pages
+│   ├── checkout/           # Guest checkout flow
+│   ├── admin/              # Admin dashboard (login-protected)
+│   └── layout.tsx          # Root layout with navbar, cart, footer
+├── components/
+│   ├── ui/                 # Reusable UI (MotionDiv, Skeleton, Toast)
+│   ├── layout/             # Navbar, Footer
+│   ├── product/            # ProductCard, ProductDetail
+│   ├── cart/               # CartDrawer
+│   └── admin/              # Admin components
+├── lib/                    # API client, utilities
+├── store/                  # Zustand stores (cart, auth)
+├── server/                 # Express.js backend
+│   └── src/
+│       ├── models/         # MongoDB models (Product, User, Order)
+│       ├── routes/         # API routes (auth, products, admin, orders)
+│       ├── middleware/      # Auth (JWT), validation (Zod)
+│       ├── services/       # AliExpress API integration
+│       └── index.ts        # Server entry point
+└── tailwind.config.ts      # Blue/purple theme configuration
+```
 
 ## Features
 
-- **Hero section with animation**: A striking hero with subtle radial gradients introduces the HypeWidget™ and lists key benefits.  The call‑to‑action buttons include magnetic hover effects and trigger a confetti burst on add to cart.
-- **Custom desktop cursor & scroll effects**: A bespoke cursor, blur‑on‑scroll header and fade‑in sections add extra visual polish.
-- **Product variations**: Size (S–XL) and colour (Black, White, Blue, Mint) selectors with price modifiers.  Disabled states appear when a variant is out of stock.
-- **Cart & checkout**: A slide‑in cart drawer with quantity controls, subtotal calculation, and a button to initiate Stripe Checkout.  A success and cancel page handle post‑purchase redirects.
-- **Social proof**: Built‑in review component and testimonials, plus trust badges and a rating summary.
-- **FAQ and policy links**: Common questions answered and links to shipping, returns, warranty and support.
-- **Admin dashboard**: A protected page for admins to view products and variants.  You can extend it to create, update or soft‑delete products via the provided API routes.
-- **Email receipts**: On successful checkout, the server sends a confirmation email to the customer and notifies store admins via SMTP.
-- **Accessible and performant**: Semantic HTML, ARIA attributes, proper focus management and colour contrast.  Pages achieve 90+ scores on Lighthouse for performance, SEO and accessibility on mobile devices.
+### Consumer-Facing
+- Responsive landing page optimized for Instagram ad traffic
+- Product catalog with search, category filtering, and sorting
+- Product detail pages with variant selection (color/size), image gallery
+- Animated cart drawer with persistent localStorage state
+- Guest checkout with order confirmation
+- Skeleton loading states, error handling, empty states
+- Framer Motion animations throughout
+- Trust signals and social proof elements
 
-## Quick start
+### Admin Dashboard
+- Secure JWT-based admin authentication
+- Dashboard with product/order/revenue statistics
+- Product management (activate/deactivate products)
+- AliExpress product import (by ID/URL or keyword search)
+- Configurable markup multiplier and branding
+- US-shipped products only filter
+- Order management view
 
-1. **Install dependencies**
+### Technical
+- Blue (#0070f3) and purple (#a855f7) color system with WCAG compliance
+- TypeScript throughout (frontend and backend)
+- Zustand for state management with persistence
+- MongoDB with Mongoose ODM
+- JWT authentication with bcrypt password hashing
+- Rate limiting, CORS, input validation (Zod)
+- Responsive mobile-first design
+- Custom cursor, scroll animations
 
-   ```bash
-   npm install
-   ```
+## Quick Start
 
-2. **Configure your environment**
+### Prerequisites
+- Node.js 18+
+- MongoDB (local or Atlas)
 
-   - Copy `.env.example` to `.env.local` and fill in the missing values.  Do **not** commit your real secrets to version control.
-   - `DATABASE_URL` defaults to a local SQLite file.  For production you can use a hosted Postgres instance.
+### 1. Frontend Setup
 
-3. **Run database migrations**
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-   ```bash
-   npm run migrate
-   ```
+### 2. Backend Setup
 
-4. **Seed sample data**
+```bash
+cd server
+npm install
+cp .env.example .env
+# Edit .env with your MongoDB URI and secrets
+npm run seed    # Creates admin user + sample products
+npm run dev     # Starts on port 4000
+```
 
-   ```bash
-   npm run seed
-   ```
+### 3. Access the App
 
-   The seed script creates one product (`HypeWidget™` by ViralGoods) with several variants, images and sample reviews.
+- **Storefront**: http://localhost:3000
+- **Admin**: http://localhost:3000/admin
+- **API**: http://localhost:4000/api
 
-5. **Start the development server**
+Default admin credentials (from seed):
+- Email: `admin@viralgoods.com`
+- Password: `admin12345`
 
-   ```bash
-   npm run dev
-   ```
+## Environment Variables
 
-   Visit `http://localhost:3000` to view your storefront.  Add a product to the cart and click **Checkout** to be redirected to the Stripe-hosted checkout.  After completing payment, you will be sent to `/success`.
-
-6. **Access the admin dashboard**
-
-   - Append the token from `NEXT_PUBLIC_ADMIN_TOKEN` to the URL: `http://localhost:3000/admin?token=YOUR_TOKEN`.
-   - The admin page lists all products and variants.  You can extend it to add and edit products via the `/api/admin/products` API route.
-
-## Environment variables
-
-The application relies on the following environment variables.  All variables are documented in `.env.example`.
-
+### Frontend (.env.local)
 | Variable | Description |
-|---------|------------|
-| `DATABASE_URL` | Connection string for SQLite or Postgres |
-| `STRIPE_SECRET_KEY` | Your Stripe secret key for creating checkout sessions |
-| `STRIPE_WEBHOOK_SECRET` | Used to verify incoming Stripe webhook events |
-| `NEXT_PUBLIC_SITE_URL` | The public base URL of your deployment (used for Stripe success/cancel URLs and SEO metadata) |
-| `NEXT_PUBLIC_ADMIN_TOKEN` | A secret token required to access `/admin`.  Keep it long and random. |
-| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` / `EMAIL_FROM` | SMTP settings used to send order confirmations |
-| `ADMIN_EMAILS` | Comma‑separated list of addresses that should receive order notifications |
+|----------|-------------|
+| `NEXT_PUBLIC_SITE_URL` | Frontend URL (default: http://localhost:3000) |
+| `NEXT_PUBLIC_API_URL` | Backend API URL (default: http://localhost:4000/api) |
 
-## Development notes
-
-- **Styling**: The design uses Tailwind CSS with a dark theme and custom brand colours matching the original ViralGoods prototype.  You can customise colours, fonts and spacing in `tailwind.config.ts`.
-- **Animations**: Framer Motion powers subtle interactions such as the product card tilt and confetti bursts when items are added to the cart.  The `Hero` component uses radial gradient backgrounds animated via CSS keyframes.
-- **Data fetching**: Product data is loaded via server components.  API routes return JSON for the product list, checkout session and admin actions.  SWR or ISR can be added for caching.
-- **Accessibility & performance**: Interactive elements have descriptive ARIA labels, focus indicators and keyboard support.  Images are lazy‑loaded via the Next.js `<Image>` component.  A simple placeholder for Google Analytics can be added later.
+### Backend (server/.env)
+| Variable | Description |
+|----------|-------------|
+| `MONGODB_URI` | MongoDB connection string |
+| `JWT_SECRET` | Secret for JWT token signing |
+| `PORT` | Server port (default: 4000) |
+| `FRONTEND_URL` | Frontend URL for CORS |
+| `ALIEXPRESS_APP_KEY` | AliExpress Affiliate API key |
+| `ALIEXPRESS_APP_SECRET` | AliExpress Affiliate API secret |
+| `ALIEXPRESS_TRACKING_ID` | AliExpress tracking ID |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `ADMIN_EMAIL` | Default admin email for seed |
+| `ADMIN_PASSWORD` | Default admin password for seed |
 
 ## Deployment
 
-### Deploy to Vercel
+### Frontend (Vercel)
+1. Push to GitHub
+2. Import in Vercel
+3. Set environment variables
+4. Deploy
 
-Deploying to Vercel is straightforward:
+### Backend (Railway / Render / Heroku)
+1. Set `MONGODB_URI` to a MongoDB Atlas connection string
+2. Set remaining environment variables
+3. Build command: `npm run build`
+4. Start command: `npm start`
 
-1. Push this repository to your preferred Git provider (GitHub, GitLab, etc.).
-2. Create a new project in Vercel and import the repository.
-3. In the Vercel dashboard, configure the environment variables from `.env.example` with your live keys and tokens.
-4. Vercel automatically runs `npm run build` and serves your app from the edge.  Prisma will detect the production database via `DATABASE_URL` — for production we recommend a managed Postgres database.
-5. Create a Stripe webhook in your Stripe dashboard pointing to `https://your-vercel-app.vercel.app/api/webhooks/stripe` using the signing secret provided in `STRIPE_WEBHOOK_SECRET`.
+## API Endpoints
 
-### Deploy with Docker
+### Public
+- `GET /api/products` - List products (supports ?category, ?search, ?sort, ?order, ?page, ?limit)
+- `GET /api/products/:slug` - Get single product
+- `POST /api/orders` - Create order (guest checkout)
+- `GET /api/orders/:orderNumber` - Get order details
 
-You can also package the application in a Docker container.  Here's an example `Dockerfile` (not included in the repo) to get you started:
+### Admin (requires Bearer token)
+- `POST /api/auth/login` - Admin login
+- `GET /api/auth/me` - Get current user
+- `GET /api/admin/stats` - Dashboard statistics
+- `GET /api/admin/products` - All products (including inactive)
+- `GET /api/admin/orders` - All orders
+- `POST /api/admin/import` - Import product from AliExpress
+- `GET /api/admin/aliexpress/search?q=query` - Search AliExpress
+- `POST /api/products` - Create product
+- `PUT /api/products/:id` - Update product
+- `DELETE /api/products/:id` - Delete product
 
-```Dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY . .
-RUN npm install --frozen-lockfile
-RUN npm run build
-EXPOSE 3000
-CMD ["npm","start"]
-```
-
-Build and run the container with the appropriate environment variables:
-
-```bash
-docker build -t viralgoods-storefront .
-docker run -p 3000:3000 \
-  -e DATABASE_URL="postgresql://user:pass@host:5432/db" \
-  -e STRIPE_SECRET_KEY=sk_live_... \
-  -e STRIPE_WEBHOOK_SECRET=whsec_... \
-  -e NEXT_PUBLIC_SITE_URL=https://shop.yourdomain.com \
-  -e NEXT_PUBLIC_ADMIN_TOKEN=supersecret \
-  -e EMAIL_HOST=smtp.yourprovider.com \
-  -e EMAIL_PORT=587 \
-  -e EMAIL_USER=user \
-  -e EMAIL_PASS=pass \
-  -e EMAIL_FROM=orders@yourdomain.com \
-  -e ADMIN_EMAILS=admin@yourdomain.com \
-  viralgoods-storefront
-```
-
-Remember to run database migrations and seeding before starting your container for the first time.
-
-## Seeding
-
-The seed script in `prisma/seed.ts` creates one product (HypeWidget™) with several size and colour variants, realistic pricing adjustments and sample images.  It also inserts a couple of reviews.  Feel free to customise the variants, SKUs, prices, stock quantities and images before running `npm run seed`.
-
-## Admin access
-
-The admin page at `/admin` requires a token set in `NEXT_PUBLIC_ADMIN_TOKEN`.  Provide it as a query parameter (e.g. `/admin?token=YOUR_TOKEN`) to log in.  The initial seed does not create any admin users because this example uses a simple token scheme.  For a more robust solution, implement an email‑based magic link flow or integrate a third‑party auth provider.
-
-## Accessibility & performance budgets
-
-This project aims for the following budgets:
-
-- **Performance**: < 3s first contentful paint on a 3G connection; images are compressed and lazy‑loaded.
-- **Accessibility**: All interactive elements are keyboard‑accessible; colours meet WCAG AA contrast ratios; ARIA labels and roles are defined.
-- **SEO**: Structured data (JSON‑LD), Open Graph/Twitter metadata, canonical URLs, sitemap and robots.txt are included.
-
-You can run Lighthouse audits via Chrome DevTools to verify these metrics.  The default configuration scores above 90 in the four Lighthouse categories on mobile.
-
----
-
-Feel free to customise, extend or contribute to this project.  We hope it serves as a solid foundation for your next viral product launch!
+## Future Roadmap
+- Stripe Payments integration (checkout sessions)
+- Consumer user accounts and order history
+- Headless CMS for content management
+- Google Analytics / Meta Pixel integration
+- A/B testing for landing page variants
+- Email notifications (order confirmation, shipping updates)
+- Wishlist functionality
+- Product reviews system
+- Inventory alerts and auto-reorder
