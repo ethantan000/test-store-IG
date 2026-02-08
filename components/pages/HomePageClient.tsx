@@ -1,5 +1,4 @@
-import HomePageClient from '@/components/pages/HomePageClient';
-import { ProductsResponse, CmsContent } from '@/lib/api';
+'use client';
 
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -8,20 +7,41 @@ import { motion } from 'framer-motion';
 import { FadeInView, StaggerContainer, StaggerItem } from '@/components/ui/MotionDiv';
 import ProductCard from '@/components/product/ProductCard';
 import { ProductGridSkeleton } from '@/components/ui/Skeleton';
-import { api } from '@/lib/api';
+import { api, ProductsResponse, CmsContent } from '@/lib/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const CATEGORIES = [
+  { name: 'Gadgets', value: 'gadgets' },
+  { name: 'Lighting', value: 'lighting' },
+  { name: 'Decor', value: 'decor' },
+  { name: 'Kitchen', value: 'kitchen' },
+];
 
-export default function Home() {
+interface HomePageClientProps {
+  initialProducts: ProductsResponse;
+  announcement?: CmsContent | null;
+}
+
+export default function HomePageClient({ initialProducts, announcement }: HomePageClientProps) {
   const { data, error, isLoading } = useSWR(
     ['products', 'featured'],
     () => api.products.list({ limit: '6', sort: 'rating', order: 'desc' }),
-    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60_000,
+      fallbackData: initialProducts,
+    }
   );
   const products = data?.products ?? [];
 
   return (
     <div className="min-h-screen">
+      {announcement && (
+        <div className="bg-brand/20 text-center text-sm text-white/80 py-2 px-4">
+          <span className="font-semibold text-white">{announcement.title}</span>
+          <span className="ml-2 text-white/70">{announcement.body}</span>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-hero min-h-[85vh] flex items-center">
         <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
@@ -71,7 +91,7 @@ export default function Home() {
               <div className="mt-10 flex flex-wrap items-center gap-6 text-sm text-white/50">
                 <div className="flex items-center gap-2">
                   <svg className="w-5 h-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.25 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
                   </svg>
                   Free Shipping $50+
                 </div>
@@ -197,21 +217,56 @@ export default function Home() {
             </StaggerContainer>
           )}
 
-async function fetchAnnouncement(): Promise<CmsContent | null> {
-  try {
-    const res = await fetch(`${API_URL}/cms/type/announcement`, {
-      next: { revalidate: 300 },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as CmsContent[];
-    return data[0] || null;
-  } catch {
-    return null;
-  }
-}
+          <FadeInView delay={0.3}>
+            <div className="text-center mt-12 sm:hidden">
+              <Link href="/products" className="btn-secondary">
+                View All Products
+              </Link>
+            </div>
+          </FadeInView>
+        </div>
+      </section>
 
-export default async function Home() {
-  const [products, announcement] = await Promise.all([fetchProducts(), fetchAnnouncement()]);
-
-  return <HomePageClient initialProducts={products} announcement={announcement} />;
+      {/* Value Props */}
+      <section className="py-20 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <StaggerContainer className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <StaggerItem>
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand/10 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.25 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                  </svg>
+                </div>
+                <h3 className="font-display font-bold text-lg mb-2">Fast US Shipping</h3>
+                <p className="text-sm text-white/50">All products ship from within the US. Free shipping on orders over $50.</p>
+              </div>
+            </StaggerItem>
+            <StaggerItem>
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand/10 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                  </svg>
+                </div>
+                <h3 className="font-display font-bold text-lg mb-2">Quality Guaranteed</h3>
+                <p className="text-sm text-white/50">Every product is tested and reviewed. 30-day money-back guarantee on all orders.</p>
+              </div>
+            </StaggerItem>
+            <StaggerItem>
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand/10 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.25v10.5a2.25 2.25 0 002.25 2.25h13.5A2.25 2.25 0 0021 18.75V8.25m-18 0A2.25 2.25 0 015.25 6h13.5A2.25 2.25 0 0121 8.25m-18 0l9 6 9-6" />
+                  </svg>
+                </div>
+                <h3 className="font-display font-bold text-lg mb-2">24/7 Support</h3>
+                <p className="text-sm text-white/50">Our team is here to help anytime you need us. Reach out via email or live chat.</p>
+              </div>
+            </StaggerItem>
+          </StaggerContainer>
+        </div>
+      </section>
+    </div>
+  );
 }

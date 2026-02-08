@@ -6,7 +6,7 @@ import useSWR from 'swr';
 import { FadeIn, StaggerContainer, StaggerItem } from '@/components/ui/MotionDiv';
 import ProductCard from '@/components/product/ProductCard';
 import { ProductGridSkeleton } from '@/components/ui/Skeleton';
-import { api } from '@/lib/api';
+import { api, ProductsResponse } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
@@ -24,7 +24,11 @@ const SORT_OPTIONS = [
   { name: 'Top Rated', value: 'rating:desc' },
 ];
 
-export default function ProductsPage() {
+interface ProductsPageClientProps {
+  initialProducts: ProductsResponse;
+}
+
+export default function ProductsPageClient({ initialProducts }: ProductsPageClientProps) {
   const searchParams = useSearchParams();
   const [category, setCategory] = useState(searchParams.get('category') || '');
   const [sortBy, setSortBy] = useState('createdAt:desc');
@@ -41,7 +45,12 @@ export default function ProductsPage() {
   const { data, error, isLoading } = useSWR(
     ['products', params],
     () => api.products.list(params),
-    { keepPreviousData: true, revalidateOnFocus: false, dedupingInterval: 30_000 }
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+      dedupingInterval: 30_000,
+      fallbackData: initialProducts,
+    }
   );
 
   const products = data?.products ?? [];
@@ -99,8 +108,25 @@ export default function ProductsPage() {
           </div>
         </FadeIn>
 
-export default async function ProductsPage() {
-  const products = await fetchProducts();
+        {/* Category Tabs */}
+        <FadeIn delay={0.15}>
+          <div className="flex flex-wrap gap-2 mb-8">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.value}
+                onClick={() => setCategory(cat.value)}
+                className={cn(
+                  'px-4 py-2 rounded-xl text-sm font-medium transition-all',
+                  category === cat.value
+                    ? 'bg-brand text-white shadow-brand'
+                    : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                )}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        </FadeIn>
 
         {/* Products Grid */}
         {isLoading ? (

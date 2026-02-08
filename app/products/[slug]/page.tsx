@@ -1,4 +1,5 @@
-'use client';
+import ProductPageClient from '@/components/pages/ProductPageClient';
+import { Product } from '@/lib/api';
 
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -36,40 +37,20 @@ export default function ProductPage({ params }: ProductPageProps) {
     );
   }
 
-  if (error || !product) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-display font-bold mb-2">Product Not Found</h1>
-          <p className="text-white/50 mb-6">The product you are looking for does not exist or has been removed.</p>
-          <Link href="/products" className="btn-primary">
-            Back to Shop
-          </Link>
-        </div>
-      </div>
-    );
-  }
+async function fetchProduct(slug: string): Promise<Product | null> {
+  const res = await fetch(`${API_URL}/products/${slug}`, {
+    next: { revalidate },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      {/* Breadcrumb */}
-      <FadeIn>
-        <nav className="mb-8 flex items-center gap-2 text-sm text-white/50" aria-label="Breadcrumb">
-          <Link href="/" className="hover:text-white transition-colors">Home</Link>
-          <span>/</span>
-          <Link href="/products" className="hover:text-white transition-colors">Products</Link>
-          <span>/</span>
-          <span className="text-white/80">{product.title}</span>
-        </nav>
-      </FadeIn>
+interface ProductPageProps {
+  params: { slug: string };
+}
 
-      <FadeIn delay={0.1}>
-        <ProductDetail product={product} />
-      </FadeIn>
+export default async function ProductPage({ params }: ProductPageProps) {
+  const product = await fetchProduct(params.slug);
 
-      <FadeIn delay={0.2}>
-        <ProductReviews productId={product._id} />
-      </FadeIn>
-    </div>
-  );
+  return <ProductPageClient slug={params.slug} initialProduct={product} />;
 }
