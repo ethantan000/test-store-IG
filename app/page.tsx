@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { FadeInView, StaggerContainer, StaggerItem } from '@/components/ui/MotionDiv';
 import ProductCard from '@/components/product/ProductCard';
 import { ProductGridSkeleton } from '@/components/ui/Skeleton';
-import { api, Product } from '@/lib/api';
+import { api } from '@/lib/api';
 
 const CATEGORIES = [
   { name: 'Gadgets', value: 'gadgets' },
@@ -17,17 +17,12 @@ const CATEGORIES = [
 ];
 
 export default function Home() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    api.products
-      .list({ limit: '6', sort: 'rating', order: 'desc' })
-      .then((res) => setProducts(res.products))
-      .catch(() => setError('Failed to load products'))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, error, isLoading } = useSWR(
+    ['products', 'featured'],
+    () => api.products.list({ limit: '6', sort: 'rating', order: 'desc' }),
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+  const products = data?.products ?? [];
 
   return (
     <div className="min-h-screen">
@@ -185,11 +180,13 @@ export default function Home() {
             </div>
           </FadeInView>
 
-          {loading ? (
+          {isLoading ? (
             <ProductGridSkeleton count={6} />
           ) : error ? (
             <div className="text-center py-12">
-              <p className="text-white/50">{error}</p>
+              <p className="text-white/50">
+                {error instanceof Error ? error.message : 'Failed to load products'}
+              </p>
               <button onClick={() => window.location.reload()} className="mt-4 btn-secondary text-sm">
                 Try Again
               </button>
