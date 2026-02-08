@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ViralGoods — Premium Desk Gadgets</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:'Plus Jakarta Sans',sans-serif;background:#07080f;color:#eef0ff;overflow-x:hidden}
+::selection{background:rgba(99,102,241,0.3)}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:#07080f}
+::-webkit-scrollbar-thumb{background:#1e2235;border-radius:3px}
+input::placeholder,textarea::placeholder{color:#5d6283}
+a{color:inherit;text-decoration:none}
+@keyframes orb{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(20px,-20px) scale(1.03)}66%{transform:translate(-15px,15px) scale(0.97)}}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.shimmer{background:linear-gradient(90deg,#141622 25%,#1e2235 50%,#141622 75%);background-size:800px 100%;animation:shimmer 1.5s infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useCallback,useMemo,useRef,createContext,useContext}=React;
+
+/* ════════════════════════════════════════════
+   DESIGN SYSTEM
+   ════════════════════════════════════════════ */
+const C={
+  bg:"#07080f",sf:"#0e1018",rs:"#141622",hv:"#1a1d2e",
+  bd:"#1e2235",bdL:"#2a2f48",
+  tx:"#eef0ff",sc:"#9499b8",mt:"#5d6283",
+  ac:"#818cf8",aD:"#6366f1",aG:"rgba(99,102,241,0.18)",
+  pp:"#a855f7",pG:"rgba(168,85,247,0.15)",
+  cy:"#22d3ee",ok:"#34d399",no:"#f87171",gd:"#fbbf24",
+  g1:"linear-gradient(135deg,#6366f1,#a855f7)",
+  g2:"linear-gradient(135deg,#a855f7,#22d3ee)",
+  g3:"linear-gradient(135deg,#6366f1 0%,#a855f7 50%,#22d3ee 100%)",
+};
+
+/* ════════════════════════════════════════════
+   PRODUCT DATABASE (persisted in state, seeded with 2)
+   In production: Prisma + Postgres
+   ════════════════════════════════════════════ */
+const SEED_PRODUCTS=[
+  {id:"p1",name:"HypeWidget™ Pro",brand:"ViralGoods",desc:"The ultimate desk gadget for content creators. Aircraft-grade aluminum with 12 RGB modes, USB-C charging, and a camera-optimized matte finish. Makes every setup look amazing on camera.",price:29.99,cmp:49.99,imgs:["https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=600&h=600&fit=crop","https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?w=600&h=600&fit=crop","https://images.unsplash.com/photo-1625842268584-8f3296236761?w=600&h=600&fit=crop"],vars:[{color:"Black",size:"M",stock:24,sku:"HW-BK-M"},{color:"Black",size:"L",stock:8,sku:"HW-BK-L"},{color:"White",size:"M",stock:15,sku:"HW-WH-M"},{color:"Blue",size:"M",stock:0,sku:"HW-BL-M"},{color:"Blue",size:"L",stock:12,sku:"HW-BL-L"}],rating:4.9,reviews:128,tags:["bestseller"],src:"manual",active:true},
+  {id:"p2",name:"GlowRing™ Desk Lamp",brand:"ViralGoods",desc:"Halo-style ring light with adjustable color temperature and brightness. Perfect for video calls, streaming, and late-night work. Touch-sensitive controls with memory function.",price:18.99,cmp:34.99,imgs:["https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=600&fit=crop","https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=600&h=600&fit=crop"],vars:[{color:"White",size:"Standard",stock:40,sku:"GL-WH"},{color:"Black",size:"Standard",stock:22,sku:"GL-BK"}],rating:4.7,reviews:89,tags:["new"],src:"manual",active:true},
+];
+
+const CUSTOMER_REVIEWS=[
+  {id:1,name:"Alex K.",r:5,t:"Absolutely stunning on my desk. Every Zoom call someone asks about it. Worth every penny.",d:"2 weeks ago"},
+  {id:2,name:"Jordan M.",r:5,t:"The RGB modes are mesmerizing. Even better in person than in photos.",d:"1 month ago"},
+  {id:3,name:"Sam R.",r:4,t:"Great quality and shipping was super fast. Solid build for the price.",d:"3 weeks ago"},
+  {id:4,name:"Taylor W.",r:5,t:"Bought this for my streamer friend. They use it in every single video now!",d:"1 week ago"},
+  {id:5,name:"Casey L.",r:5,t:"The build quality is absolutely insane for this price point. Feels premium.",d:"5 days ago"},
+];
+
+/* ════════════════════════════════════════════
+   ALIEXPRESS SIMULATOR
+   In production: this calls your Next.js API route
+   which uses ScraperAPI/Oxylabs to fetch real AE data.
+   The simulator matches the exact JSON schema those
+   APIs return, so swapping is a 1-line change.
+   ════════════════════════════════════════════ */
+const AE_PRODUCT_DB={
+  "1005007231456":{
+    id:"1005007231456",
+    title:"RGB LED Desk Ambient Light Bar - Smart Gaming Backlight with App Control",
+    description:"Smart RGB LED light bar with app control and 12 scene modes including music sync, gaming, movie, and custom color modes. Features USB-C power delivery, adhesive 3M mounting, and Bluetooth 5.0 connectivity. Ultra-slim 8mm profile fits behind any monitor. Ships from California warehouse with 2-5 day delivery.",
+    price:{min:8.42,max:12.99,currency:"USD"},
+    originalPrice:{min:19.99,max:29.99,currency:"USD"},
+    images:[
+      "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=600&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600&h=600&fit=crop",
+    ],
+    rating:4.6,
+    totalOrders:3420,
+    totalReviews:891,
+    shipsFrom:["US","CN"],
+    shipping:[{country:"US",method:"Standard",price:0,days:"2-5",warehouse:"Los Angeles, CA"}],
+    seller:{name:"TechGlow Official Store",rating:96.2,followers:12400},
+    variants:[
+      {color:"Black",size:"30cm",stock:150,sku:"AE-RGB-BLK-30",price:8.42},
+      {color:"Black",size:"50cm",stock:88,sku:"AE-RGB-BLK-50",price:10.99},
+      {color:"White",size:"30cm",stock:64,sku:"AE-RGB-WHT-30",price:8.42},
+      {color:"White",size:"50cm",stock:41,sku:"AE-RGB-WHT-50",price:10.99},
+    ],
+    specifications:[{name:"Power",value:"5V USB"},{name:"Connectivity",value:"Bluetooth 5.0"},{name:"LED Count",value:"42 RGB LEDs"},{name:"Material",value:"Aluminum + PC"}],
+  },
+  "1005008912034":{
+    id:"1005008912034",
+    title:"Magnetic Levitation Floating Globe with LED Constellation Night Light",
+    description:"C-shaped magnetic levitation globe with stunning LED constellation map illumination. Features touch-sensitive wooden base, auto-rotation, and anti-gravity floating technology. Perfect centerpiece for offices, studios, and content backgrounds. Runs silently with no moving parts. Ships from US warehouse.",
+    price:{min:14.20,max:18.50,currency:"USD"},
+    originalPrice:{min:35.99,max:42.99,currency:"USD"},
+    images:[
+      "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=600&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1457364887197-9150188c107b?w=600&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=600&h=600&fit=crop",
+    ],
+    rating:4.8,
+    totalOrders:8100,
+    totalReviews:2340,
+    shipsFrom:["US"],
+    shipping:[{country:"US",method:"Standard",price:0,days:"3-5",warehouse:"Edison, NJ"}],
+    seller:{name:"SkyFloat Home Decor",rating:97.8,followers:28900},
+    variants:[
+      {color:"Black Base",size:"6 inch",stock:72,sku:"AE-GLB-BLK-6",price:14.20},
+      {color:"Gold Base",size:"6 inch",stock:35,sku:"AE-GLB-GLD-6",price:16.90},
+      {color:"Black Base",size:"8 inch",stock:28,sku:"AE-GLB-BLK-8",price:18.50},
+    ],
+    specifications:[{name:"Globe Size",value:"6 inch / 8 inch"},{name:"Base Material",value:"Walnut Wood"},{name:"Power",value:"12V DC Adapter"},{name:"Weight",value:"850g"}],
+  },
+  "1005006443221":{
+    id:"1005006443221",
+    title:"Portable Mini Thermal Printer - Wireless Bluetooth Pocket Label Maker",
+    description:"Ultra-compact Bluetooth thermal printer that works with iOS and Android. Print custom labels, stickers, receipts, photos, and notes directly from your phone. No ink or toner needed — uses thermal paper. Perfect for small business, content creators, journaling, and organization. Includes free app with 800+ templates.",
+    price:{min:11.30,max:15.80,currency:"USD"},
+    originalPrice:{min:28.99,max:36.99,currency:"USD"},
+    images:[
+      "https://images.unsplash.com/photo-1612198188060-c7c2a3b66eae?w=600&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1588702547919-26089e690ecc?w=600&h=600&fit=crop",
+    ],
+    rating:4.5,
+    totalOrders:5600,
+    totalReviews:1420,
+    shipsFrom:["US","CN"],
+    shipping:[{country:"US",method:"Standard",price:0,days:"2-4",warehouse:"Newark, NJ"}],
+    seller:{name:"PrintMate Official",rating:95.1,followers:8700},
+    variants:[
+      {color:"White",size:"Standard",stock:200,sku:"AE-PRT-WHT",price:11.30},
+      {color:"Pink",size:"Standard",stock:110,sku:"AE-PRT-PNK",price:11.30},
+      {color:"Green",size:"Standard",stock:85,sku:"AE-PRT-GRN",price:11.30},
+      {color:"White",size:"Pro (wider)",stock:60,sku:"AE-PRT-WHT-PRO",price:15.80},
+    ],
+    specifications:[{name:"Print Width",value:"58mm / 80mm Pro"},{name:"Resolution",value:"203 DPI"},{name:"Battery",value:"1500mAh rechargeable"},{name:"Connectivity",value:"Bluetooth 4.2"}],
+  },
+  "1005009122347":{
+    id:"1005009122347",
+    title:"3D Crystal Ball Night Light - Laser Engraved Galaxy Solar System LED Lamp",
+    description:"Stunning 3D laser-engraved crystal ball available in Galaxy, Solar System, and Moon designs. Sits on a premium LED-lit wooden base with USB power. Crystal is K9 optical glass with extraordinary clarity. The base cycles through 7 colors or holds steady. Makes an incredible gift or desk display piece.",
+    price:{min:6.80,max:9.90,currency:"USD"},
+    originalPrice:{min:18.99,max:24.99,currency:"USD"},
+    images:[
+      "https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?w=600&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=600&h=600&fit=crop",
+    ],
+    rating:4.7,
+    totalOrders:12400,
+    totalReviews:4200,
+    shipsFrom:["US","CN"],
+    shipping:[{country:"US",method:"Standard",price:0,days:"3-5",warehouse:"City of Industry, CA"}],
+    seller:{name:"Crystal Dreams Store",rating:98.1,followers:45000},
+    variants:[
+      {color:"Galaxy",size:"60mm",stock:300,sku:"AE-CRY-GAL-60",price:6.80},
+      {color:"Galaxy",size:"80mm",stock:180,sku:"AE-CRY-GAL-80",price:8.50},
+      {color:"Solar System",size:"80mm",stock:95,sku:"AE-CRY-SOL-80",price:9.20},
+      {color:"Moon",size:"80mm",stock:120,sku:"AE-CRY-MOON-80",price:9.90},
+    ],
+    specifications:[{name:"Material",value:"K9 Optical Crystal"},{name:"Base",value:"Natural Wood + LED"},{name:"Power",value:"USB (cable included)"},{name:"Weight",value:"380g (60mm) / 620g (80mm)"}],
+  },
+  "1005007998800":{
+    id:"1005007998800",
+    title:"Smart Mug Warmer - USB Electric Heated Coaster with Temperature Display",
+    description:"Intelligent mug warmer with real-time LED temperature display and 3 precise heat settings (45°C / 55°C / 65°C). Features auto shut-off after 4 hours, waterproof surface, and universal compatibility with ceramic, glass, and stainless steel mugs. Ultra-quiet operation. Keep your coffee or tea at the perfect temperature all day.",
+    price:{min:9.15,max:13.40,currency:"USD"},
+    originalPrice:{min:24.99,max:32.99,currency:"USD"},
+    images:[
+      "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&h=600&fit=crop",
+      "https://images.unsplash.com/photo-1497515114889-1c06568aaab3?w=600&h=600&fit=crop",
+    ],
+    rating:4.4,
+    totalOrders:6800,
+    totalReviews:1890,
+    shipsFrom:["US"],
+    shipping:[{country:"US",method:"Standard",price:0,days:"2-5",warehouse:"Ontario, CA"}],
+    seller:{name:"HomeTech Smart Living",rating:94.5,followers:6200},
+    variants:[
+      {color:"Black",size:"Standard",stock:120,sku:"AE-MUG-BLK",price:9.15},
+      {color:"White",size:"Standard",stock:90,sku:"AE-MUG-WHT",price:9.15},
+      {color:"Black",size:"Pro (fast heat)",stock:45,sku:"AE-MUG-BLK-PRO",price:13.40},
+    ],
+    specifications:[{name:"Power",value:"20W"},{name:"Heating",value:"PTC ceramic element"},{name:"Surface",value:"Tempered glass, waterproof"},{name:"Auto-off",value:"4 hours"}],
+  },
+};
+
+/* Simulates a real scraper API call — matches ScraperAPI/Oxylabs JSON schema */
+function simulateAEFetch(productId){
+  return new Promise((resolve,reject)=>{
+    setTimeout(()=>{
+      const p=AE_PRODUCT_DB[productId];
+      if(p){
+        /* Filter: only return if US shipping available */
+        const usShipping=p.shipping.find(s=>s.country==="US");
+        if(usShipping){
+          resolve({success:true,product:p,usWarehouse:usShipping.warehouse,usDelivery:usShipping.days});
+        }else{
+          reject({success:false,error:"NOT_US_SHIPPED",message:"This product does not ship from a US warehouse."});
+        }
+      }else{
+        reject({success:false,error:"NOT_FOUND",message:"Product not found. Check the AliExpress URL and try again."});
+      }
+    },1800+Math.random()*1200);
+  });
+}
+
+function simulateAESearch(query){
+  return new Promise((resolve)=>{
+    setTimeout(()=>{
+      const q=query.toLowerCase();
+      const results=Object.values(AE_PRODUCT_DB).filter(p=>{
+        const hasUS=p.shipsFrom.includes("US");
+        const matchesQuery=p.title.toLowerCase().includes(q)||p.description.toLowerCase().includes(q);
+        return hasUS&&matchesQuery;
+      });
+      resolve({success:true,results,total:results.length,query,filter:"US warehouse only"});
+    },1500+Math.random()*1000);
+  });
+}
+
+/* ════════════════════════════════════════════
+   GLOBAL STORE
+   ════════════════════════════════════════════ */
+const Ctx=createContext();
+const useS=()=>useContext(Ctx);
+
+const ADMIN_CREDS={email:"admin@viralgoods.com",pass:"admin123"};
+
+function Prov({children}){
+  const[prods,setProds]=useState(SEED_PRODUCTS);
+  const[cart,setCart]=useState([]);
+  const[cOpen,setCOpen]=useState(false);
+  const[pg,setPg]=useState("store");
+  const[spId,setSpId]=useState(null);
+  const[toasts,setToasts]=useState([]);
+  const[admin,setAdmin]=useState(false);
+
+  const toast=useCallback((m,tp)=>{
+    const id=Date.now()+Math.random();
+    setToasts(p=>[...p,{id,m,tp:tp||"ok"}]);
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3500);
+  },[]);
+
+  const login=useCallback((email,pass)=>{
+    if(email===ADMIN_CREDS.email&&pass===ADMIN_CREDS.pass){setAdmin(true);toast("Welcome back, Admin!");return true;}
+    return false;
+  },[toast]);
+
+  const logout=useCallback(()=>{setAdmin(false);setPg("store");toast("Logged out","info");},[toast]);
+
+  const addCart=useCallback((pr,v)=>{
+    const k=pr.id+"-"+v.sku;
+    setCart(prev=>{
+      const ex=prev.find(i=>i.k===k);
+      if(ex)return prev.map(i=>i.k===k?{...i,qty:i.qty+1}:i);
+      return[...prev,{k,name:pr.name,img:pr.imgs[0],color:v.color,size:v.size,price:pr.price,qty:1}];
+    });
+    setCOpen(true);
+    toast(pr.name+" added to cart!");
+  },[toast]);
+
+  const updQty=useCallback((k,q)=>{
+    if(q<=0)setCart(p=>p.filter(i=>i.k!==k));
+    else setCart(p=>p.map(i=>i.k===k?{...i,qty:q}:i));
+  },[]);
+  const rmItem=useCallback(k=>setCart(p=>p.filter(i=>i.k!==k)),[]);
+  const cTotal=useMemo(()=>cart.reduce((s,i)=>s+i.price*i.qty,0),[cart]);
+  const cCount=useMemo(()=>cart.reduce((s,i)=>s+i.qty,0),[cart]);
+
+  const addProd=useCallback(p=>{setProds(pr=>[p,...pr]);toast('"'+p.name+'" added to store!');},[toast]);
+  const togProd=useCallback(id=>setProds(p=>p.map(pr=>pr.id===id?{...pr,active:!pr.active}:pr)),[]);
+  const delProd=useCallback(id=>{setProds(p=>p.filter(pr=>pr.id!==id));toast("Product removed","info");},[toast]);
+  const editProd=useCallback((id,updates)=>{setProds(p=>p.map(pr=>pr.id===id?{...pr,...updates}:pr));toast("Product updated!");},[toast]);
+
+  const nav=useCallback((p,id)=>{setPg(p);if(id)setSpId(id);window.scrollTo({top:0,behavior:"smooth"});},[]);
+  const selProd=useMemo(()=>prods.find(p=>p.id===spId),[prods,spId]);
+
+  return <Ctx.Provider value={{prods,cart,cOpen,setCOpen,pg,nav,addCart,updQty,rmItem,cTotal,cCount,addProd,togProd,delProd,editProd,selProd,toasts,toast,admin,login,logout}}>{children}</Ctx.Provider>;
+}
+
+/* ════════════════════════════════════════════
+   SHARED UI COMPONENTS
+   ════════════════════════════════════════════ */
+const Stars=({r,sz})=><span style={{display:"inline-flex",gap:1}}>{[1,2,3,4,5].map(i=><svg key={i} width={sz||12} height={sz||12} viewBox="0 0 20 20" fill={i<=Math.round(r)?C.gd:C.bd}><path d="M10 1l2.39 4.84 5.34.78-3.87 3.77.91 5.33L10 13.27l-4.77 2.51.91-5.33L2.27 6.62l5.34-.78L10 1z"/></svg>)}</span>;
+
+function Tag({children,c}){
+  const m={accent:[C.aG,C.ac],purple:[C.pG,C.pp],cyan:["rgba(34,211,238,0.12)",C.cy],success:["rgba(52,211,153,0.1)",C.ok],danger:["rgba(248,113,113,0.1)",C.no],muted:[C.sf,C.sc],gold:["rgba(251,191,36,0.1)",C.gd]};
+  const[bg,fg]=m[c||"accent"]||m.accent;
+  return <span style={{background:bg,color:fg,border:"1px solid "+fg+"33",padding:"3px 9px",borderRadius:999,fontSize:10,fontWeight:700,letterSpacing:"0.4px",textTransform:"uppercase",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3}}>{children}</span>;
+}
+
+const Inp=({label,hint,...rest})=><div style={{marginBottom:12}}>{label&&<label style={{fontSize:11,fontWeight:700,color:C.sc,display:"block",marginBottom:4}}>{label}</label>}<input {...rest} style={{width:"100%",padding:"10px 14px",borderRadius:8,background:C.sf,border:"1px solid "+C.bd,color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",...(rest.style||{})}}/>{hint&&<p style={{fontSize:10,color:C.mt,margin:"3px 0 0"}}>{hint}</p>}</div>;
+
+function Spinner({size}){const s=size||20;return <div style={{width:s,height:s,border:"2px solid "+C.bd,borderTopColor:C.ac,borderRadius:"50%",animation:"spin 0.6s linear infinite",flexShrink:0}}/>;}
+
+/* ════════════════════════════════════════════
+   HEADER — Consumer-facing (no admin link)
+   ════════════════════════════════════════════ */
+function Header(){
+  const{cCount,setCOpen,pg,nav,admin,logout}=useS();
+  const[sc,setSc]=useState(false);
+  useEffect(()=>{const h=()=>setSc(window.scrollY>30);window.addEventListener("scroll",h,{passive:true});return()=>window.removeEventListener("scroll",h);},[]);
+
+  return(
+    <header style={{position:"fixed",top:0,left:0,right:0,zIndex:1000,height:56,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",background:sc?"rgba(7,8,15,0.95)":"transparent",backdropFilter:sc?"blur(16px)":"none",borderBottom:"1px solid "+(sc?C.bd:"transparent"),transition:"all 0.3s"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}} onClick={()=>nav("store")}>
+        <div style={{width:28,height:28,borderRadius:8,background:C.g1,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:14,color:"#fff"}}>V</div>
+        <span style={{fontWeight:800,fontSize:16,color:C.tx}}>ViralGoods</span>
+      </div>
+      <nav style={{display:"flex",alignItems:"center",gap:4}}>
+        {admin&&<>
+          <button onClick={()=>nav("admin")} style={{background:"none",border:"none",color:pg==="admin"?C.ac:C.sc,cursor:"pointer",fontSize:12,fontWeight:600,padding:"6px 10px",borderRadius:8,display:"flex",alignItems:"center",gap:4}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            Dashboard
+          </button>
+          <button onClick={logout} style={{background:"none",border:"none",color:C.mt,cursor:"pointer",fontSize:11,fontWeight:600,padding:"6px 8px"}}>Logout</button>
+        </>}
+        <button onClick={()=>setCOpen(true)} style={{position:"relative",background:"none",border:"none",cursor:"pointer",padding:6}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.tx} strokeWidth="1.8"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          {cCount>0&&<span style={{position:"absolute",top:0,right:0,width:16,height:16,borderRadius:"50%",background:C.g1,color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{cCount}</span>}
+        </button>
+      </nav>
+    </header>
+  );
+}
+
+/* ════════════════════════════════════════════
+   TOASTS
+   ════════════════════════════════════════════ */
+function Toasts(){
+  const{toasts}=useS();
+  return <div style={{position:"fixed",bottom:20,right:20,zIndex:9999,display:"flex",flexDirection:"column",gap:6}}>
+    {toasts.map(t=><div key={t.id} style={{padding:"10px 18px",borderRadius:10,background:t.tp==="ok"?C.aD:C.rs,color:"#fff",fontWeight:600,fontSize:13,boxShadow:"0 8px 24px rgba(0,0,0,0.5)",border:"1px solid "+C.bdL,animation:"fadeUp 0.3s ease-out"}}>{t.tp==="ok"?"✓ ":"ℹ "}{t.m}</div>)}
+  </div>;
+}
+
+/* ════════════════════════════════════════════
+   HERO SECTION
+   ════════════════════════════════════════════ */
+function Hero(){
+  return(
+    <section style={{position:"relative",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:"100px 20px 60px"}}>
+      <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:"5%",left:"15%",width:500,height:500,borderRadius:"50%",filter:"blur(130px)",opacity:0.18,background:C.aD,animation:"orb 10s ease-in-out infinite"}}/>
+        <div style={{position:"absolute",bottom:"10%",right:"10%",width:400,height:400,borderRadius:"50%",filter:"blur(110px)",opacity:0.14,background:C.pp,animation:"orb 12s ease-in-out infinite reverse"}}/>
+        <div style={{position:"absolute",top:"40%",left:"55%",width:300,height:300,borderRadius:"50%",filter:"blur(90px)",opacity:0.08,background:C.cy,animation:"orb 8s ease-in-out infinite 2s"}}/>
+      </div>
+      <div style={{textAlign:"center",maxWidth:760,position:"relative",zIndex:1}}>
+        <Tag c="purple">✦ New Drop — Free US Shipping</Tag>
+        <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"clamp(38px,8vw,76px)",fontWeight:700,lineHeight:1.06,color:C.tx,margin:"24px 0 16px",letterSpacing:"-2px"}}>
+          Desk Gadgets <span style={{background:C.g3,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",fontStyle:"italic"}}>That Go Viral</span>
+        </h1>
+        <p style={{fontSize:"clamp(14px,2.5vw,18px)",color:C.sc,maxWidth:480,margin:"0 auto 36px",lineHeight:1.65}}>Premium gadgets for creators that look amazing on your desk and even better in your content.</p>
+        <button onClick={()=>{var el=document.getElementById("cat");if(el)el.scrollIntoView({behavior:"smooth"});}} style={{padding:"16px 36px",borderRadius:14,background:C.g1,color:"#fff",fontWeight:700,fontSize:15,border:"none",cursor:"pointer",boxShadow:"0 0 40px "+C.aG,letterSpacing:"0.3px"}}>Shop Now →</button>
+        <div style={{display:"flex",gap:20,justifyContent:"center",marginTop:48,flexWrap:"wrap"}}>
+          {["🇺🇸 Ships from US","🚚 2-5 Day Delivery","↩️ 30-Day Returns","⭐ 10K+ Happy Customers"].map(t=><span key={t} style={{fontSize:11,color:C.mt,fontWeight:600}}>{t}</span>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ════════════════════════════════════════════
+   PRODUCT CARD + CATALOG GRID
+   ════════════════════════════════════════════ */
+function Card({p,i}){
+  const{nav}=useS();const[h,setH]=useState(false);
+  return(
+    <div onClick={()=>nav("product",p.id)} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)} style={{cursor:"pointer",borderRadius:16,overflow:"hidden",border:"1px solid "+(h?C.bdL:C.bd),background:C.sf,transition:"all 0.3s",transform:h?"translateY(-4px)":"none",boxShadow:h?"0 12px 40px rgba(99,102,241,0.06)":"none",animation:"fadeUp 0.5s ease-out "+(i*0.1)+"s both"}}>
+      <div style={{position:"relative",aspectRatio:"1/1",overflow:"hidden",background:C.rs}}>
+        <img src={p.imgs[0]} alt={p.name} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",transition:"transform 0.5s",transform:h?"scale(1.06)":"scale(1)"}}/>
+        <div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}>
+          {p.tags&&p.tags.map(t=><Tag key={t} c={t==="bestseller"?"gold":t==="trending"?"purple":"cyan"}>{t}</Tag>)}
+        </div>
+        {p.cmp&&<div style={{position:"absolute",top:10,right:10}}><Tag c="danger">-{Math.round((1-p.price/p.cmp)*100)}%</Tag></div>}
+      </div>
+      <div style={{padding:"14px 16px 18px"}}>
+        <p style={{fontSize:10,color:C.mt,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",margin:"0 0 4px"}}>{p.brand}</p>
+        <h3 style={{fontSize:15,fontWeight:700,color:C.tx,margin:"0 0 8px",lineHeight:1.3}}>{p.name}</h3>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><Stars r={p.rating}/><span style={{fontSize:11,color:C.mt}}>({p.reviews})</span></div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+          <span style={{fontSize:20,fontWeight:800,color:C.tx}}>${p.price.toFixed(2)}</span>
+          {p.cmp&&<span style={{fontSize:13,color:C.mt,textDecoration:"line-through"}}>${p.cmp.toFixed(2)}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Catalog(){
+  const{prods}=useS();const active=prods.filter(p=>p.active);
+  if(active.length===0)return null;
+  return(
+    <section id="cat" style={{padding:"40px 20px 100px",maxWidth:1100,margin:"0 auto"}}>
+      <h2 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"clamp(24px,4vw,38px)",fontWeight:700,color:C.tx,textAlign:"center",margin:"0 0 8px",letterSpacing:"-0.5px"}}>Our Collection</h2>
+      <p style={{fontSize:14,color:C.sc,textAlign:"center",margin:"0 auto 40px",maxWidth:400}}>Hand-picked gadgets shipped fast from US warehouses. Free shipping on every order.</p>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,260px),1fr))",gap:18}}>
+        {active.map((p,i)=><Card key={p.id} p={p} i={i}/>)}
+      </div>
+    </section>
+  );
+}
+
+/* ════════════════════════════════════════════
+   PRODUCT DETAIL PAGE
+   ════════════════════════════════════════════ */
+function ProdDetail(){
+  const{selProd:p,addCart,nav}=useS();
+  const[img,setImg]=useState(0);
+  const[sv,setSv]=useState(null);
+  useEffect(()=>{if(p&&p.vars)setSv(p.vars[0]);setImg(0);},[p]);
+  if(!p)return<section style={{padding:"120px 20px",textAlign:"center"}}><p style={{color:C.sc,fontSize:16}}>Product not found.</p><button onClick={()=>nav("store")} style={{marginTop:16,background:C.g1,border:"none",color:"#fff",padding:"12px 24px",borderRadius:10,cursor:"pointer",fontWeight:700}}>Back to Store</button></section>;
+  const cv=sv||p.vars[0];
+  const cols=[...new Set(p.vars.map(v=>v.color))];
+  const szs=[...new Set(p.vars.map(v=>v.size))];
+  const ok=cv&&cv.stock>0;
+  return(
+    <section style={{padding:"72px 20px 80px",maxWidth:1100,margin:"0 auto"}}>
+      <button onClick={()=>nav("store")} style={{background:"none",border:"none",color:C.sc,cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:24,display:"flex",alignItems:"center",gap:4}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to Store
+      </button>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,360px),1fr))",gap:40,alignItems:"start"}}>
+        <div>
+          <div style={{borderRadius:18,overflow:"hidden",background:C.rs,aspectRatio:"1/1",border:"1px solid "+C.bd}}><img src={p.imgs[img]} alt={p.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>
+          {p.imgs.length>1&&<div style={{display:"flex",gap:8,marginTop:10}}>{p.imgs.map((im,i)=><button key={i} onClick={()=>setImg(i)} style={{flex:1,aspectRatio:"1/1",borderRadius:10,overflow:"hidden",border:"2px solid "+(i===img?C.ac:C.bd),cursor:"pointer",padding:0,background:C.sf,opacity:i===img?1:0.45,transition:"all 0.2s"}}><img src={im} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></button>)}</div>}
+        </div>
+        <div>
+          <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+            {p.tags&&p.tags.map(t=><Tag key={t} c={t==="bestseller"?"gold":t==="trending"?"purple":"cyan"}>{t}</Tag>)}
+          </div>
+          <p style={{fontSize:11,color:C.mt,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",margin:"0 0 4px"}}>{p.brand}</p>
+          <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:"clamp(26px,5vw,38px)",fontWeight:700,color:C.tx,margin:"0 0 12px",letterSpacing:"-0.5px"}}>{p.name}</h1>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}><Stars r={p.rating} sz={16}/><span style={{fontSize:14,color:C.sc}}>{p.rating} ({p.reviews} reviews)</span></div>
+          <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:20}}>
+            <span style={{fontSize:32,fontWeight:800,color:C.tx}}>${p.price.toFixed(2)}</span>
+            {p.cmp&&<><span style={{fontSize:16,color:C.mt,textDecoration:"line-through"}}>${p.cmp.toFixed(2)}</span><Tag c="success">Save {Math.round((1-p.price/p.cmp)*100)}%</Tag></>}
+          </div>
+          <p style={{fontSize:14,color:C.sc,lineHeight:1.75,margin:"0 0 24px"}}>{p.desc}</p>
+          {cols.length>1&&<div style={{marginBottom:20}}>
+            <p style={{fontSize:11,fontWeight:700,color:C.sc,textTransform:"uppercase",margin:"0 0 8px"}}>Color — <span style={{color:C.tx}}>{cv.color}</span></p>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{cols.map(c=>{const a=cv.color===c;return<button key={c} onClick={()=>{const v=p.vars.find(v=>v.color===c&&v.size===cv.size)||p.vars.find(v=>v.color===c);if(v)setSv(v);}} style={{padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:600,background:a?C.aG:C.rs,color:a?C.ac:C.sc,border:"1px solid "+(a?C.aD:C.bd),cursor:"pointer",transition:"all 0.2s"}}>{c}</button>})}</div>
+          </div>}
+          {szs.length>1&&<div style={{marginBottom:20}}>
+            <p style={{fontSize:11,fontWeight:700,color:C.sc,textTransform:"uppercase",margin:"0 0 8px"}}>Size</p>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{szs.map(s=>{const v=p.vars.find(v=>v.color===cv.color&&v.size===s);const a=cv.size===s;const oos=!v||v.stock===0;return<button key={s} onClick={()=>v&&!oos&&setSv(v)} disabled={oos} style={{padding:"8px 18px",borderRadius:10,fontSize:12,fontWeight:700,background:a?C.g1:C.rs,color:a?"#fff":oos?C.mt:C.tx,border:"1px solid "+(a?"transparent":C.bd),cursor:oos?"not-allowed":"pointer",opacity:oos?0.3:1,textDecoration:oos?"line-through":"none"}}>{s}</button>})}</div>
+          </div>}
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:18}}>
+            <span style={{width:8,height:8,borderRadius:"50%",background:ok?C.ok:C.no}}/>
+            <span style={{fontSize:13,color:ok?C.ok:C.no,fontWeight:600}}>{ok?"In Stock":"Out of Stock"}</span>
+            {ok&&cv.stock<=5&&<span style={{fontSize:12,color:C.gd,fontWeight:500}}>— Only {cv.stock} left!</span>}
+          </div>
+          <button onClick={()=>{if(ok)addCart(p,cv);}} disabled={!ok} style={{width:"100%",padding:"18px",borderRadius:14,background:ok?C.g1:C.rs,color:ok?"#fff":C.mt,fontWeight:800,fontSize:16,border:ok?"none":"1px solid "+C.bd,cursor:ok?"pointer":"not-allowed",boxShadow:ok?"0 0 40px "+C.aG:"none",transition:"all 0.2s",letterSpacing:"0.3px"}}>{ok?"Add to Cart — $"+p.price.toFixed(2):"Sold Out"}</button>
+          <div style={{marginTop:18,padding:"16px 18px",borderRadius:14,background:C.rs,border:"1px solid "+C.bd}}>
+            {[["🇺🇸","Ships from US warehouse"],["🚚","Free standard shipping · 2-5 business days"],["↩️","30-day hassle-free returns"],["🔒","Secure checkout with Stripe"]].map(([i,t])=><div key={t} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0"}}><span style={{fontSize:14}}>{i}</span><span style={{fontSize:12,color:C.sc}}>{t}</span></div>)}
+          </div>
+        </div>
+      </div>
+      <div style={{marginTop:72,borderTop:"1px solid "+C.bd,paddingTop:56}}>
+        <h2 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:26,fontWeight:700,color:C.tx,textAlign:"center",margin:"0 0 36px"}}>What Customers Are Saying</h2>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,240px),1fr))",gap:14}}>
+          {CUSTOMER_REVIEWS.map((r,i)=><div key={r.id} style={{padding:18,borderRadius:14,background:C.rs,border:"1px solid "+C.bd,animation:"fadeUp 0.4s ease-out "+(i*0.08)+"s both"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><Stars r={r.r}/><Tag c="muted">Verified</Tag></div>
+            <p style={{fontSize:13,color:C.tx,lineHeight:1.6,margin:"0 0 12px"}}>"{r.t}"</p>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:11,fontWeight:700,color:C.sc}}>{r.name}</span><span style={{fontSize:10,color:C.mt}}>{r.d}</span></div>
+          </div>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ════════════════════════════════════════════
+   CART DRAWER
+   ════════════════════════════════════════════ */
+function CartDr(){
+  const{cart,updQty,rmItem,cTotal,cOpen,setCOpen}=useS();
+  const[busy,setBusy]=useState(false);
+  if(!cOpen)return null;
+  return(
+    <div>
+      <div onClick={()=>setCOpen(false)} style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}/>
+      <div style={{position:"fixed",top:0,right:0,bottom:0,width:"min(400px,92vw)",zIndex:2001,background:C.bg,borderLeft:"1px solid "+C.bd,display:"flex",flexDirection:"column",animation:"slideIn 0.3s ease-out"}}>
+        <div style={{padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid "+C.bd}}>
+          <h3 style={{fontSize:17,fontWeight:800,color:C.tx,margin:0}}>Your Cart</h3>
+          <button onClick={()=>setCOpen(false)} style={{background:"none",border:"none",color:C.mt,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:18}}>
+          {cart.length===0?<div style={{textAlign:"center",paddingTop:60}}><p style={{fontSize:44,marginBottom:8}}>🛒</p><p style={{fontSize:15,color:C.sc,fontWeight:600}}>Your cart is empty</p><p style={{fontSize:12,color:C.mt,marginTop:4}}>Browse our collection and add items.</p></div>
+          :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {cart.map(it=><div key={it.k} style={{display:"flex",gap:14,padding:14,borderRadius:14,background:C.rs,border:"1px solid "+C.bd}}>
+              <img src={it.img} alt="" style={{width:56,height:56,borderRadius:10,objectFit:"cover"}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:13,fontWeight:700,color:C.tx,margin:"0 0 2px"}}>{it.name}</p>
+                <p style={{fontSize:11,color:C.mt,margin:"0 0 8px"}}>{it.color} / {it.size}</p>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <button onClick={()=>updQty(it.k,it.qty-1)} style={{width:26,height:26,borderRadius:7,border:"1px solid "+C.bd,background:"none",color:C.tx,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                    <span style={{fontSize:13,fontWeight:700,color:C.tx,minWidth:18,textAlign:"center"}}>{it.qty}</span>
+                    <button onClick={()=>updQty(it.k,it.qty+1)} style={{width:26,height:26,borderRadius:7,border:"1px solid "+C.bd,background:"none",color:C.tx,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:14,fontWeight:700,color:C.tx}}>${(it.price*it.qty).toFixed(2)}</span>
+                    <button onClick={()=>rmItem(it.k)} style={{background:"none",border:"none",color:C.mt,cursor:"pointer",fontSize:13}}>✕</button>
+                  </div>
+                </div>
+              </div>
+            </div>)}
+          </div>}
+        </div>
+        {cart.length>0&&<div style={{padding:18,borderTop:"1px solid "+C.bd}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.sc}}>Shipping</span><span style={{fontSize:12,color:C.ok,fontWeight:600}}>FREE</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:16,paddingTop:10,borderTop:"1px solid "+C.bd}}><span style={{fontSize:16,fontWeight:800,color:C.tx}}>Total</span><span style={{fontSize:20,fontWeight:800,color:C.tx}}>${cTotal.toFixed(2)}</span></div>
+          <button onClick={()=>{setBusy(true);setTimeout(()=>setBusy(false),2000);}} disabled={busy} style={{width:"100%",padding:"16px",borderRadius:12,background:busy?C.hv:C.g1,color:busy?C.mt:"#fff",fontWeight:800,fontSize:15,border:"none",cursor:busy?"wait":"pointer",transition:"all 0.2s"}}>{busy?"Processing...":"Secure Checkout"}</button>
+          <div style={{display:"flex",justifyContent:"center",gap:8,marginTop:14}}>{["Visa","Mastercard","Amex","PayPal","Apple Pay"].map(p=><span key={p} style={{fontSize:9,color:C.mt,padding:"3px 6px",borderRadius:4,border:"1px solid "+C.bd}}>{p}</span>)}</div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   ADMIN LOGIN
+   ════════════════════════════════════════════ */
+function AdminLogin(){
+  const{login,nav}=useS();
+  const[em,setEm]=useState("");
+  const[pw,setPw]=useState("");
+  const[err,setErr]=useState("");
+  const[loading,setLoading]=useState(false);
+
+  const go=()=>{
+    setErr("");setLoading(true);
+    setTimeout(()=>{
+      if(login(em,pw)){nav("admin");}
+      else{setErr("Invalid credentials. Try admin@viralgoods.com / admin123");}
+      setLoading(false);
+    },800);
+  };
+
+  return(
+    <section style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{width:"100%",maxWidth:380,padding:32,borderRadius:20,background:C.rs,border:"1px solid "+C.bd}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{width:44,height:44,borderRadius:12,background:C.g1,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:20,color:"#fff",marginBottom:12}}>V</div>
+          <h2 style={{fontSize:20,fontWeight:800,color:C.tx,margin:"0 0 4px"}}>Admin Login</h2>
+          <p style={{fontSize:12,color:C.mt}}>ViralGoods Store Management</p>
+        </div>
+        {err&&<div style={{padding:"10px 14px",borderRadius:8,background:"rgba(248,113,113,0.1)",border:"1px solid "+C.no+"33",color:C.no,fontSize:12,marginBottom:16,fontWeight:500}}>{err}</div>}
+        <Inp label="Email" type="email" value={em} onChange={e=>setEm(e.target.value)} placeholder="admin@viralgoods.com" onKeyDown={e=>e.key==="Enter"&&go()}/>
+        <Inp label="Password" type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&go()}/>
+        <button onClick={go} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:12,background:C.g1,color:"#fff",fontWeight:700,fontSize:14,border:"none",cursor:loading?"wait":"pointer",marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{loading&&<Spinner size={16}/>}{loading?"Signing in...":"Sign In"}</button>
+        <p style={{fontSize:10,color:C.mt,textAlign:"center",marginTop:16}}>Demo: admin@viralgoods.com / admin123</p>
+        <button onClick={()=>nav("store")} style={{width:"100%",background:"none",border:"none",color:C.sc,fontSize:12,cursor:"pointer",marginTop:12,fontWeight:500}}>← Back to Store</button>
+      </div>
+    </section>
+  );
+}
+
+/* ════════════════════════════════════════════
+   ADMIN DASHBOARD — AliExpress Import Engine
+   ════════════════════════════════════════════ */
+function Admin(){
+  const{prods,addProd,togProd,delProd,editProd,nav,toast,admin}=useS();
+  const[tab,setTab]=useState("products");
+
+  if(!admin)return <AdminLogin/>;
+
+  return(
+    <section style={{padding:"72px 20px 80px",maxWidth:1100,margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",flexWrap:"wrap",gap:12,marginBottom:28}}>
+        <div>
+          <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:28,fontWeight:700,color:C.tx,margin:"0 0 4px"}}>Store Dashboard</h1>
+          <p style={{fontSize:13,color:C.sc}}>Manage products, import from AliExpress, track margins.</p>
+        </div>
+        <button onClick={()=>nav("store")} style={{padding:"8px 16px",borderRadius:8,background:C.sf,color:C.sc,border:"1px solid "+C.bd,cursor:"pointer",fontSize:12,fontWeight:600}}>View Store →</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:24}}>
+        {[
+          ["Products",prods.length,"📦",C.tx],
+          ["Active",prods.filter(p=>p.active).length,"✅",C.ok],
+          ["Dropship",prods.filter(p=>p.src==="aliexpress").length,"🔗",C.pp],
+          ["Avg Margin",(prods.length?prods.reduce((s,p)=>s+(p.cost?(1-p.cost/p.price)*100:60),0)/prods.length:0).toFixed(0)+"%","📈",C.ac],
+        ].map(([l,v,ic,vc])=>
+          <div key={l} style={{padding:"16px 18px",borderRadius:14,background:C.rs,border:"1px solid "+C.bd}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:10,color:C.mt,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px"}}>{l}</span><span style={{fontSize:16}}>{ic}</span></div>
+            <span style={{fontSize:24,fontWeight:800,color:vc}}>{v}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:3,marginBottom:28,background:C.rs,padding:3,borderRadius:12,border:"1px solid "+C.bd,width:"fit-content"}}>
+        {[["products","📋 Products"],["import","🔗 Import from AliExpress"],["settings","⚙️ Settings"]].map(([id,lb])=>
+          <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 18px",borderRadius:10,fontSize:12,fontWeight:700,background:tab===id?C.g1:"transparent",color:tab===id?"#fff":C.sc,border:"none",cursor:"pointer",transition:"all 0.2s"}}>{lb}</button>
+        )}
+      </div>
+
+      {tab==="products"&&<ProductsTab/>}
+      {tab==="import"&&<ImportTab/>}
+      {tab==="settings"&&<SettingsTab/>}
+    </section>
+  );
+}
+
+function ProductsTab(){
+  const{prods,togProd,delProd,editProd,nav}=useS();
+  return(
+    <div>{prods.length===0?<div style={{textAlign:"center",padding:"50px"}}><p style={{fontSize:44}}>📦</p><p style={{color:C.sc,marginTop:8,fontSize:15}}>No products yet</p><p style={{color:C.mt,fontSize:12,marginTop:4}}>Go to the Import tab to add products from AliExpress.</p></div>
+    :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {prods.map(p=><div key={p.id} style={{display:"flex",gap:14,padding:14,borderRadius:14,background:C.rs,border:"1px solid "+C.bd,alignItems:"center",flexWrap:"wrap",opacity:p.active?1:0.4,transition:"opacity 0.2s"}}>
+        <img src={p.imgs[0]} alt="" style={{width:52,height:52,borderRadius:10,objectFit:"cover",flexShrink:0}}/>
+        <div style={{flex:"1 1 200px",minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+            <span style={{fontSize:14,fontWeight:700,color:C.tx}}>{p.name}</span>
+            {p.src==="aliexpress"&&<Tag c="purple">AliExpress</Tag>}
+            {!p.active&&<Tag c="danger">Hidden</Tag>}
+          </div>
+          <div style={{display:"flex",gap:14,fontSize:11,color:C.mt,flexWrap:"wrap"}}>
+            <span style={{color:C.tx,fontWeight:700}}>${p.price.toFixed(2)}</span>
+            {p.cost&&<span>AE Cost: ${p.cost.toFixed(2)}</span>}
+            {p.cost&&<span style={{color:C.ok,fontWeight:600}}>Margin: {((1-p.cost/p.price)*100).toFixed(0)}%</span>}
+            {p.cost&&<span style={{color:C.ac}}>Profit: ${(p.price-p.cost).toFixed(2)}/unit</span>}
+            <span>{p.vars.reduce((s,v)=>s+v.stock,0)} in stock</span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:4,flexShrink:0}}>
+          <button onClick={()=>nav("product",p.id)} style={{padding:"7px 12px",borderRadius:8,fontSize:11,fontWeight:600,background:C.sf,color:C.sc,border:"1px solid "+C.bd,cursor:"pointer"}}>Preview</button>
+          <button onClick={()=>togProd(p.id)} style={{padding:"7px 12px",borderRadius:8,fontSize:11,fontWeight:600,background:p.active?"rgba(251,191,36,0.08)":"rgba(52,211,153,0.08)",color:p.active?C.gd:C.ok,border:"1px solid "+(p.active?C.gd:C.ok)+"33",cursor:"pointer"}}>{p.active?"Hide":"Publish"}</button>
+          <button onClick={()=>{if(confirm("Delete "+p.name+"?"))delProd(p.id);}} style={{padding:"7px 12px",borderRadius:8,fontSize:11,fontWeight:600,background:"rgba(248,113,113,0.08)",color:C.no,border:"1px solid "+C.no+"33",cursor:"pointer"}}>Delete</button>
+        </div>
+      </div>)}
+    </div>}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────
+   ALIEXPRESS IMPORT ENGINE
+   ──────────────────────────────────────────── */
+function ImportTab(){
+  const{addProd,toast}=useS();
+  const[mode,setMode]=useState("url"); // url | search
+  const[url,setUrl]=useState("");
+  const[query,setQuery]=useState("");
+  const[mk,setMk]=useState(2.5);
+  const[loading,setLoading]=useState(false);
+  const[error,setError]=useState("");
+  const[fetched,setFetched]=useState(null); // single product
+  const[results,setResults]=useState([]); // search results
+  const[sel,setSel]=useState(null); // selected for import
+  const[cn,setCn]=useState("");
+  const[cd,setCd]=useState("");
+  const[cb,setCb]=useState("ViralGoods");
+  const[cp,setCp]=useState("");
+  const inp={width:"100%",padding:"10px 14px",borderRadius:8,background:C.sf,border:"1px solid "+C.bd,color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box"};
+
+  const extractId=(u)=>{
+    const m=u.match(/\/(\d{10,})/);
+    return m?m[1]:u.replace(/\D/g,"");
+  };
+
+  const fetchByUrl=async()=>{
+    const pid=extractId(url);
+    if(!pid){setError("Enter a valid AliExpress product URL or ID.");return;}
+    setLoading(true);setError("");setFetched(null);setResults([]);
+    try{
+      const data=await simulateAEFetch(pid);
+      setFetched(data);setSel(data.product);setCn(data.product.title);setCd(data.product.description);setCp("");
+    }catch(e){setError(e.message||"Failed to fetch product.");}
+    setLoading(false);
+  };
+
+  const searchProducts=async()=>{
+    if(!query.trim()){setError("Enter a search query.");return;}
+    setLoading(true);setError("");setFetched(null);setResults([]);setSel(null);
+    try{
+      const data=await simulateAESearch(query);
+      setResults(data.results);
+      if(data.results.length===0)setError("No US-shipped products found for \""+query+"\". Try: LED, globe, crystal, mug, printer");
+    }catch(e){setError(e.message);}
+    setLoading(false);
+  };
+
+  const selectForImport=(ae)=>{
+    setSel(ae);setCn(ae.title);setCd(ae.description);setCp("");
+  };
+
+  const doImport=()=>{
+    if(!sel)return;
+    const retailPrice=cp?parseFloat(cp):(sel.price.min*mk);
+    const usVars=sel.variants.filter(v=>v.stock>0).map(v=>({...v,price:v.price||sel.price.min}));
+    addProd({
+      id:"ae-"+sel.id+"-"+Date.now(),
+      name:cn||sel.title,
+      brand:cb||"ViralGoods",
+      desc:cd||sel.description,
+      price:parseFloat(retailPrice.toFixed(2)),
+      cmp:parseFloat((retailPrice*1.6).toFixed(2)),
+      imgs:sel.images,
+      vars:usVars.length>0?usVars:sel.variants,
+      rating:sel.rating,
+      reviews:sel.totalReviews||Math.floor((sel.totalOrders||0)*0.03),
+      tags:sel.totalOrders>5000?["trending"]:["new"],
+      src:"aliexpress",
+      cost:sel.price.min,
+      aeId:sel.id,
+      aeSeller:sel.seller,
+      active:true,
+    });
+    setSel(null);setFetched(null);setResults([]);setUrl("");setQuery("");
+    setCn("");setCd("");setCp("");
+  };
+
+  const renderProductPreview=(ae,data)=>(
+    <div style={{padding:20,borderRadius:16,background:C.rs,border:"1px solid "+C.aD,marginTop:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:16,flexWrap:"wrap",gap:8}}>
+        <h3 style={{fontSize:16,fontWeight:700,color:C.tx,margin:0}}>Product Found</h3>
+        {data&&<Tag c="success">🇺🇸 US Warehouse: {data.usWarehouse}</Tag>}
+      </div>
+      <div style={{display:"flex",gap:16,marginBottom:20,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:6}}>{ae.images.slice(0,3).map((im,i)=><img key={i} src={im} alt="" style={{width:80,height:80,borderRadius:10,objectFit:"cover",border:"1px solid "+C.bd}}/>)}</div>
+        <div style={{flex:"1 1 240px"}}>
+          <h4 style={{fontSize:14,fontWeight:700,color:C.tx,margin:"0 0 6px",lineHeight:1.3}}>{ae.title}</h4>
+          <p style={{fontSize:12,color:C.mt,margin:"0 0 10px",lineHeight:1.5}}>{ae.description.substring(0,150)}...</p>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,marginBottom:8}}>
+            <span style={{fontWeight:800,color:C.tx}}>AE Price: ${ae.price.min.toFixed(2)}–${ae.price.max.toFixed(2)}</span>
+            <span style={{display:"flex",alignItems:"center",gap:3}}><Stars r={ae.rating} sz={10}/> {ae.rating} ({ae.totalReviews} reviews)</span>
+            <span style={{color:C.mt}}>{(ae.totalOrders||0).toLocaleString()} orders</span>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <Tag c="accent">{ae.variants.length} variants</Tag>
+            <Tag c="success">{ae.variants.reduce((s,v)=>s+v.stock,0)} units in stock</Tag>
+            {ae.seller&&<Tag c="muted">Seller: {ae.seller.name} ({ae.seller.rating}%)</Tag>}
+          </div>
+          {ae.specifications&&<div style={{marginTop:10,display:"flex",gap:6,flexWrap:"wrap"}}>{ae.specifications.map(s=><span key={s.name} style={{fontSize:10,color:C.mt,padding:"2px 8px",borderRadius:6,background:C.sf,border:"1px solid "+C.bd}}>{s.name}: {s.value}</span>)}</div>}
+        </div>
+      </div>
+
+      {/* Customize */}
+      <div style={{borderTop:"1px solid "+C.bd,paddingTop:18}}>
+        <h4 style={{fontSize:13,fontWeight:700,color:C.ac,margin:"0 0 14px"}}>✏️ Customize for Your Store</h4>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div><label style={{fontSize:10,fontWeight:700,color:C.mt,display:"block",marginBottom:3}}>Product Name</label><input value={cn} onChange={e=>setCn(e.target.value)} style={inp}/></div>
+          <div><label style={{fontSize:10,fontWeight:700,color:C.mt,display:"block",marginBottom:3}}>Brand Name</label><input value={cb} onChange={e=>setCb(e.target.value)} style={inp}/></div>
+        </div>
+        <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:700,color:C.mt,display:"block",marginBottom:3}}>Description</label><textarea value={cd} onChange={e=>setCd(e.target.value)} rows={3} style={{...inp,resize:"vertical",lineHeight:1.5}}/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div><label style={{fontSize:10,fontWeight:700,color:C.mt,display:"block",marginBottom:3}}>Your Retail Price ($)</label><input type="number" value={cp} onChange={e=>setCp(e.target.value)} placeholder={(ae.price.min*mk).toFixed(2)} style={inp}/></div>
+          <div><label style={{fontSize:10,fontWeight:700,color:C.mt,display:"block",marginBottom:3}}>Markup Multiplier</label><input type="number" value={mk} onChange={e=>setMk(parseFloat(e.target.value)||1)} min="1" max="10" step="0.1" style={{...inp,textAlign:"center"}}/></div>
+        </div>
+
+        {/* Margin calculator */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8,padding:"14px 16px",borderRadius:12,background:C.sf,border:"1px solid "+C.bd,marginBottom:16}}>
+          {[
+            ["AE Cost","$"+ae.price.min.toFixed(2),C.tx],
+            ["Your Price","$"+(cp||((ae.price.min*mk).toFixed(2))),C.ac],
+            ["Profit/Unit","$"+((cp?parseFloat(cp):(ae.price.min*mk))-ae.price.min).toFixed(2),C.ok],
+            ["Margin",((1-ae.price.min/(cp?parseFloat(cp):(ae.price.min*mk)))*100).toFixed(0)+"%",C.ok],
+          ].map(([l,v,vc])=><div key={l}><p style={{fontSize:10,color:C.mt,margin:"0 0 2px",fontWeight:600}}>{l}</p><p style={{fontSize:16,fontWeight:800,color:vc,margin:0}}>{v}</p></div>)}
+        </div>
+
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={doImport} style={{padding:"12px 28px",borderRadius:10,background:C.g2,color:"#fff",fontWeight:700,fontSize:13,border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>✓ Add to Store</button>
+          <button onClick={()=>{setSel(null);setFetched(null);}} style={{padding:"12px 20px",borderRadius:10,background:"none",color:C.sc,fontWeight:600,fontSize:13,border:"1px solid "+C.bd,cursor:"pointer"}}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return(
+    <div>
+      <div style={{padding:24,borderRadius:16,background:C.rs,border:"1px solid "+C.bd}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div>
+            <h3 style={{fontSize:16,fontWeight:700,color:C.tx,margin:"0 0 4px"}}>Import from AliExpress</h3>
+            <p style={{fontSize:12,color:C.mt}}>Products are filtered to US-warehouse-only for fast shipping.</p>
+          </div>
+          <div style={{display:"flex",gap:3,background:C.sf,padding:3,borderRadius:8,border:"1px solid "+C.bd}}>
+            <button onClick={()=>setMode("url")} style={{padding:"6px 14px",borderRadius:6,fontSize:11,fontWeight:700,background:mode==="url"?C.g1:"transparent",color:mode==="url"?"#fff":C.sc,border:"none",cursor:"pointer"}}>By URL</button>
+            <button onClick={()=>setMode("search")} style={{padding:"6px 14px",borderRadius:6,fontSize:11,fontWeight:700,background:mode==="search"?C.g1:"transparent",color:mode==="search"?"#fff":C.sc,border:"none",cursor:"pointer"}}>Search</button>
+          </div>
+        </div>
+
+        {mode==="url"?<div>
+          <Inp label="AliExpress Product URL or ID" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://www.aliexpress.com/item/1005007231456.html" onKeyDown={e=>e.key==="Enter"&&fetchByUrl()} hint="Paste any AliExpress product link. The system will extract images, title, description, price, variants, and stock."/>
+          <button onClick={fetchByUrl} disabled={loading} style={{padding:"12px 24px",borderRadius:10,background:C.g1,color:"#fff",fontWeight:700,fontSize:13,border:"none",cursor:loading?"wait":"pointer",opacity:loading?0.7:1,display:"flex",alignItems:"center",gap:8,marginTop:4}}>{loading&&<Spinner size={14}/>}{loading?"Fetching product data...":"Fetch Product"}</button>
+        </div>:<div>
+          <Inp label="Search Keywords" value={query} onChange={e=>setQuery(e.target.value)} placeholder="LED desk lamp, floating globe, crystal ball..." onKeyDown={e=>e.key==="Enter"&&searchProducts()} hint="Search across US-warehouse AliExpress listings. Try: LED, globe, crystal, mug, printer"/>
+          <button onClick={searchProducts} disabled={loading} style={{padding:"12px 24px",borderRadius:10,background:C.g1,color:"#fff",fontWeight:700,fontSize:13,border:"none",cursor:loading?"wait":"pointer",opacity:loading?0.7:1,display:"flex",alignItems:"center",gap:8,marginTop:4}}>{loading&&<Spinner size={14}/>}{loading?"Searching US warehouses...":"Search Products"}</button>
+        </div>}
+
+        <div style={{marginTop:14,padding:"10px 14px",borderRadius:10,background:C.aG,border:"1px solid "+C.aD+"33",fontSize:11,color:C.ac,display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:14}}>🇺🇸</span>
+          <span><strong>US-Only Filter Active</strong> — Only products shipped from US warehouses are imported. This ensures 2-5 day delivery to your customers.</span>
+        </div>
+      </div>
+
+      {error&&<div style={{marginTop:16,padding:"12px 16px",borderRadius:10,background:"rgba(248,113,113,0.08)",border:"1px solid "+C.no+"33",color:C.no,fontSize:13}}>{error}</div>}
+
+      {/* Single product fetched by URL */}
+      {fetched&&sel&&renderProductPreview(sel,fetched)}
+
+      {/* Search results */}
+      {results.length>0&&!sel&&<div style={{marginTop:20}}>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.tx,margin:"0 0 14px"}}>{results.length} US-Shipped Products Found</h3>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {results.map(ae=><div key={ae.id} style={{display:"flex",gap:14,padding:16,borderRadius:14,background:C.rs,border:"1px solid "+C.bd,flexWrap:"wrap",cursor:"pointer",transition:"border 0.2s"}} onClick={()=>selectForImport(ae)}>
+            <div style={{display:"flex",gap:6,flexShrink:0}}>{ae.images.slice(0,2).map((im,i)=><img key={i} src={im} alt="" style={{width:72,height:72,borderRadius:10,objectFit:"cover",border:"1px solid "+C.bd}}/>)}</div>
+            <div style={{flex:"1 1 200px",minWidth:0}}>
+              <h4 style={{fontSize:13,fontWeight:700,color:C.tx,margin:"0 0 4px",lineHeight:1.3}}>{ae.title}</h4>
+              <p style={{fontSize:11,color:C.mt,margin:"0 0 8px",lineHeight:1.4}}>{ae.description.substring(0,100)}...</p>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",fontSize:11}}>
+                <span style={{fontWeight:800,color:C.tx}}>AE: ${ae.price.min.toFixed(2)}</span>
+                <span style={{color:C.ac,fontWeight:700}}>Sell: ${(ae.price.min*mk).toFixed(2)}</span>
+                <span style={{color:C.ok,fontWeight:600}}>Margin: {((1-1/mk)*100).toFixed(0)}%</span>
+                <Stars r={ae.rating} sz={10}/>
+                <span style={{color:C.mt}}>{(ae.totalOrders||0).toLocaleString()} sold</span>
+                <Tag c="success">🇺🇸 US Ship</Tag>
+              </div>
+            </div>
+            <div style={{flexShrink:0,display:"flex",alignItems:"center"}}>
+              <span style={{padding:"8px 16px",borderRadius:8,fontSize:12,fontWeight:700,background:C.g1,color:"#fff"}}>Import →</span>
+            </div>
+          </div>)}
+        </div>
+      </div>}
+
+      {/* Selected from search for detailed import */}
+      {sel&&!fetched&&renderProductPreview(sel,null)}
+    </div>
+  );
+}
+
+function SettingsTab(){
+  const inp={width:"100%",padding:"10px 14px",borderRadius:8,background:C.sf,border:"1px solid "+C.bd,color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box"};
+  return(
+    <div style={{maxWidth:560}}>
+      <div style={{padding:24,borderRadius:16,background:C.rs,border:"1px solid "+C.bd,marginBottom:14}}>
+        <h3 style={{fontSize:16,fontWeight:700,color:C.tx,margin:"0 0 16px"}}>🔑 API Configuration</h3>
+        {[
+          ["AliExpress Scraper API Key","sk-scraper-xxxxx","ScraperAPI, Oxylabs, or Apify key for fetching real AliExpress data"],
+          ["Stripe Secret Key","sk_live_xxxxx","For processing customer checkout payments"],
+          ["Stripe Webhook Secret","whsec_xxxxx","Verify incoming Stripe payment events"],
+          ["SMTP API Key","SG.xxxxx","SendGrid/Mailgun for order confirmation emails"],
+        ].map(([l,ph,h])=>
+          <div key={l} style={{marginBottom:14}}>
+            <label style={{fontSize:11,fontWeight:700,color:C.sc,display:"block",marginBottom:4}}>{l}</label>
+            <input placeholder={ph} type="password" style={inp}/>
+            <p style={{fontSize:10,color:C.mt,margin:"4px 0 0"}}>{h}</p>
+          </div>
+        )}
+      </div>
+      <div style={{padding:16,borderRadius:12,background:C.pG,border:"1px solid "+C.pp+"33",fontSize:12,color:C.pp,lineHeight:1.6}}>
+        <strong>🔒 Security Note:</strong> In production, all API keys are stored as server-side environment variables and never exposed to the browser. This settings panel writes to your <code>.env.local</code> through a secure authenticated API route.
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   FOOTER
+   ════════════════════════════════════════════ */
+function Footer(){
+  const{nav,admin}=useS();
+  return(
+    <footer style={{padding:"48px 20px 28px",borderTop:"1px solid "+C.bd,background:C.sf}}>
+      <div style={{maxWidth:1100,margin:"0 auto"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:32,marginBottom:36}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <div style={{width:24,height:24,borderRadius:7,background:C.g1,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,color:"#fff"}}>V</div>
+              <span style={{fontWeight:800,fontSize:15,color:C.tx}}>ViralGoods</span>
+            </div>
+            <p style={{fontSize:11,color:C.mt,lineHeight:1.6}}>Premium desk gadgets for creators.<br/>Fast US shipping on every order.</p>
+          </div>
+          {[["Shop",["All Products","New Arrivals","Bestsellers"]],["Support",["FAQ","Shipping Info","Returns","Contact Us"]],["Legal",["Privacy Policy","Terms of Service","Refund Policy"]]].map(([t,ls])=>
+            <div key={t}><h4 style={{fontSize:11,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.5px",margin:"0 0 12px"}}>{t}</h4>{ls.map(l=><a key={l} href="#" style={{display:"block",fontSize:12,color:C.mt,marginBottom:8}}>{l}</a>)}</div>
+          )}
+        </div>
+        <div style={{paddingTop:20,borderTop:"1px solid "+C.bd,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:10,color:C.mt}}>© 2026 ViralGoods. All rights reserved.</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {!admin&&<button onClick={()=>nav("login")} style={{background:"none",border:"none",color:C.bd,cursor:"pointer",fontSize:10}}>Admin</button>}
+            <div style={{display:"flex",gap:6}}>{["Visa","Mastercard","Amex","PayPal","Apple Pay"].map(p=><span key={p} style={{fontSize:9,color:C.mt,padding:"3px 6px",borderRadius:4,border:"1px solid "+C.bd}}>{p}</span>)}</div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ════════════════════════════════════════════
+   APP + ROUTER
+   ════════════════════════════════════════════ */
+function Router(){
+  const{pg}=useS();
+  if(pg==="login")return <AdminLogin/>;
+  if(pg==="admin")return <Admin/>;
+  if(pg==="product")return <ProdDetail/>;
+  return <><Hero/><Catalog/></>;
+}
+
+function App(){
+  return(
+    <Prov>
+      <Header/>
+      <Router/>
+      <Footer/>
+      <CartDr/>
+      <Toasts/>
+    </Prov>
+  );
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
