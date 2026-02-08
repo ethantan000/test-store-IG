@@ -1,31 +1,91 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
-import { api, Product, AdminStats } from '@/lib/api';
+import { api, Product, AdminStats, AdminAnalytics } from '@/lib/api';
 import { formatPrice, cn } from '@/lib/utils';
 import { FadeIn } from '@/components/ui/MotionDiv';
 
-type Tab = 'dashboard' | 'products' | 'import' | 'orders';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
+type Tab = 'dashboard' | 'products' | 'import' | 'orders' | 'analytics' | 'inventory';
+
+type ProductFormState = {
+  title: string;
+  description: string;
+  brand: string;
+  category: string;
+  price: string;
+  comparePrice: string;
+  costPrice: string;
+  images: string[];
+  isActive: boolean;
+  variants: string;
+};
 
 function LoginForm() {
+  const setAuth = useAuthStore((s) => s.setAuth);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const [twoFactorToken, setTwoFactorToken] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [isTwoFactor, setIsTwoFactor] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { token, user } = await api.auth.login(email, password);
-      setAuth(token, user);
-      toast.success('Logged in successfully');
+      const res = await api.auth.login(email, password);
+      if (res.requiresTwoFactor && res.twoFactorToken) {
+        setTwoFactorToken(res.twoFactorToken);
+        setIsTwoFactor(true);
+        toast.success('Verification code sent. Check your email.');
+        return;
+      }
+      if (res.token && res.refreshToken && res.user) {
+        setAuth(res.token, res.refreshToken, res.user);
+        toast.success('Logged in successfully');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twoFactorToken) return;
+    setLoading(true);
+    try {
+      const res = await api.auth.verifyTwoFactor(twoFactorToken, twoFactorCode);
+      if (res.token && res.refreshToken && res.user) {
+        setAuth(res.token, res.refreshToken, res.user);
+        toast.success('2FA verified');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMagicLink = async () => {
+    if (!email) {
+      toast.error('Enter your admin email first');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.auth.requestMagicLink(email);
+      toast.success('Magic link sent to your email');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send magic link');
     } finally {
       setLoading(false);
     }
@@ -42,29 +102,55 @@ function LoginForm() {
             <h1 className="text-2xl font-display font-bold">Admin Login</h1>
             <p className="text-sm text-white/50 mt-1">Restricted to store administrators</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="email"
-              placeholder="Email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input-field"
-              autoComplete="email"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input-field"
-              autoComplete="current-password"
-            />
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
+
+          {!isTwoFactor ? (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <input
+                type="email"
+                placeholder="Email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input-field"
+                autoComplete="email"
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input-field"
+                autoComplete="current-password"
+              />
+              <button type="submit" disabled={loading} className="btn-primary w-full">
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+              <button
+                type="button"
+                onClick={handleMagicLink}
+                disabled={loading}
+                className="btn-secondary w-full"
+              >
+                Send Magic Link
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerify} className="space-y-4">
+              <input
+                type="text"
+                placeholder="6-digit code"
+                required
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value)}
+                className="input-field"
+                maxLength={6}
+              />
+              <button type="submit" disabled={loading} className="btn-primary w-full">
+                {loading ? 'Verifying...' : 'Verify'}
+              </button>
+            </form>
+          )}
         </div>
       </FadeIn>
     </div>
@@ -101,69 +187,368 @@ function Dashboard({ token }: { token: string }) {
   );
 }
 
+function AnalyticsPanel({ token }: { token: string }) {
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+
+  useEffect(() => {
+    api.admin.analytics(token, 14).then(setAnalytics).catch(() => {});
+  }, [token]);
+
+  if (!analytics) return <div className="skeleton h-40 w-full" />;
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">Orders & Revenue (Last {analytics.rangeDays} days)</h3>
+        <span className="text-xs text-white/50">Stripe + manual orders</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-white/50 text-left">
+              <th className="py-2">Date</th>
+              <th className="py-2">Orders</th>
+              <th className="py-2">Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analytics.daily.map((row) => (
+              <tr key={row._id} className="border-t border-white/10">
+                <td className="py-2">{row._id}</td>
+                <td className="py-2">{row.orders}</td>
+                <td className="py-2">{formatPrice(row.revenue)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ProductForm({
+  token,
+  initial,
+  onSave,
+  onCancel,
+}: {
+  token: string;
+  initial?: Product | null;
+  onSave: (product: Product) => void;
+  onCancel?: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState<ProductFormState>(() => ({
+    title: initial?.title || '',
+    description: initial?.description || '',
+    brand: initial?.brand || 'ViralGoods',
+    category: initial?.category || 'general',
+    price: initial?.price?.toString() || '',
+    comparePrice: initial?.comparePrice?.toString() || '',
+    costPrice: initial?.costPrice?.toString() || '',
+    images: initial?.images || [],
+    isActive: initial?.isActive ?? true,
+    variants: initial?.variants ? JSON.stringify(initial.variants, null, 2) : '[]',
+  }));
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setLoading(true);
+    try {
+      const uploads = await Promise.all(
+        Array.from(files).map(async (file) => {
+          const data = new FormData();
+          data.append('file', file);
+          const res = await fetch(`${API_URL}/uploads`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: data,
+          });
+          if (!res.ok) throw new Error('Upload failed');
+          const payload = await res.json();
+          return payload.url as string;
+        })
+      );
+      setForm((prev) => ({ ...prev, images: [...prev.images, ...uploads] }));
+      toast.success('Images uploaded');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = {
+        title: form.title,
+        description: form.description,
+        brand: form.brand,
+        category: form.category,
+        price: parseFloat(form.price),
+        comparePrice: form.comparePrice ? parseFloat(form.comparePrice) : undefined,
+        costPrice: form.costPrice ? parseFloat(form.costPrice) : undefined,
+        images: form.images,
+        isActive: form.isActive,
+        variants: JSON.parse(form.variants || '[]'),
+      };
+
+      const res = await fetch(`${API_URL}/products${initial?._id ? `/${initial._id}` : ''}` , {
+        method: initial?._id ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to save product' }));
+        throw new Error(err.error || 'Failed to save product');
+      }
+
+      const product = (await res.json()) as Product;
+      onSave(product);
+      toast.success(initial?._id ? 'Product updated' : 'Product created');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addImageUrl = (url: string) => {
+    if (!url) return;
+    setForm((prev) => ({ ...prev, images: [...prev.images, url] }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="card p-6 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input
+          type="text"
+          placeholder="Title"
+          required
+          value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+          className="input-field"
+        />
+        <input
+          type="text"
+          placeholder="Brand"
+          value={form.brand}
+          onChange={(e) => setForm({ ...form, brand: e.target.value })}
+          className="input-field"
+        />
+      </div>
+
+      <textarea
+        placeholder="Description"
+        value={form.description}
+        onChange={(e) => setForm({ ...form, description: e.target.value })}
+        className="input-field min-h-[120px]"
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input
+          type="number"
+          placeholder="Price"
+          required
+          value={form.price}
+          onChange={(e) => setForm({ ...form, price: e.target.value })}
+          className="input-field"
+        />
+        <input
+          type="number"
+          placeholder="Compare at price"
+          value={form.comparePrice}
+          onChange={(e) => setForm({ ...form, comparePrice: e.target.value })}
+          className="input-field"
+        />
+        <input
+          type="number"
+          placeholder="Cost price"
+          value={form.costPrice}
+          onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+          className="input-field"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input
+          type="text"
+          placeholder="Category"
+          value={form.category}
+          onChange={(e) => setForm({ ...form, category: e.target.value })}
+          className="input-field"
+        />
+        <label className="flex items-center gap-2 text-sm text-white/70">
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+          />
+          Active product
+        </label>
+      </div>
+
+      <div>
+        <label className="text-xs text-white/50">Variants (JSON array)</label>
+        <textarea
+          value={form.variants}
+          onChange={(e) => setForm({ ...form, variants: e.target.value })}
+          className="input-field min-h-[120px] font-mono text-xs"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs text-white/50">Images</label>
+        <div className="flex flex-wrap gap-2">
+          {form.images.map((img) => (
+            <div key={img} className="relative w-16 h-16 rounded-lg overflow-hidden bg-white/5">
+              <Image src={img} alt="Product" fill className="object-cover" sizes="64px" />
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="url"
+            placeholder="Image URL"
+            className="input-field"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addImageUrl((e.target as HTMLInputElement).value);
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+          />
+          <label className="btn-secondary text-sm cursor-pointer">
+            Upload Images
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleUpload(e.target.files)}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button type="submit" disabled={loading} className="btn-primary">
+          {loading ? 'Saving...' : initial?._id ? 'Update Product' : 'Create Product'}
+        </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="btn-secondary">
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function ProductManager({ token }: { token: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Product | null>(null);
 
   useEffect(() => {
     api.admin.products(token).then(setProducts).catch(() => {}).finally(() => setLoading(false));
   }, [token]);
 
-  const toggleActive = async (product: Product) => {
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/products/${product._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ isActive: !product.isActive }),
-      });
-      if (res.ok) {
-        setProducts((prev) =>
-          prev.map((p) => (p._id === product._id ? { ...p, isActive: !p.isActive } : p))
-        );
-        toast.success(`Product ${product.isActive ? 'deactivated' : 'activated'}`);
+  const handleSave = (product: Product) => {
+    setEditing(null);
+    setProducts((prev) => {
+      const exists = prev.find((p) => p._id === product._id);
+      if (exists) {
+        return prev.map((p) => (p._id === product._id ? product : p));
       }
-    } catch {
-      toast.error('Failed to update product');
+      return [product, ...prev];
+    });
+  };
+
+  const handleDelete = async (product: Product) => {
+    if (!confirm(`Delete ${product.title}?`)) return;
+    try {
+      const res = await fetch(`${API_URL}/products/${product._id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      setProducts((prev) => prev.filter((p) => p._id !== product._id));
+      toast.success('Product deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
   if (loading) return <div className="skeleton h-40 w-full" />;
 
   return (
-    <div className="space-y-3">
-      {products.map((product) => (
-        <div key={product._id} className="card p-4 flex items-center gap-4">
-          <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
-            {product.images[0] && (
-              <Image src={product.images[0]} alt={product.title} fill className="object-cover" sizes="56px" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm line-clamp-1">{product.title}</p>
-            <div className="flex items-center gap-3 text-xs text-white/50 mt-0.5">
-              <span>{formatPrice(product.price)}</span>
-              {product.isDropship && <span className="badge text-[10px]">Dropship</span>}
-              <span className={product.isActive ? 'text-green-400' : 'text-red-400'}>
-                {product.isActive ? 'Active' : 'Inactive'}
-              </span>
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Create Product</h3>
+        <ProductForm token={token} onSave={handleSave} />
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Manage Products</h3>
+        <div className="space-y-3">
+          {products.map((product) => (
+            <div key={product._id} className="card p-4 flex flex-col md:flex-row md:items-center gap-4">
+              <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
+                {product.images[0] && (
+                  <Image src={product.images[0]} alt={product.title} fill className="object-cover" sizes="56px" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm line-clamp-1">{product.title}</p>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-white/50 mt-0.5">
+                  <span>{formatPrice(product.price)}</span>
+                  {product.isDropship && <span className="badge text-[10px]">Dropship</span>}
+                  <span className={product.isActive ? 'text-green-400' : 'text-red-400'}>
+                    {product.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditing(product)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(product)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
-          </div>
-          <button
-            onClick={() => toggleActive(product)}
-            className={cn(
-              'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-              product.isActive
-                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-            )}
-          >
-            {product.isActive ? 'Deactivate' : 'Activate'}
-          </button>
+          ))}
+          {products.length === 0 && (
+            <p className="text-center text-white/50 py-8">No products yet. Import some from AliExpress!</p>
+          )}
         </div>
-      ))}
-      {products.length === 0 && (
-        <p className="text-center text-white/50 py-8">No products yet. Import some from AliExpress!</p>
-      )}
+
+        {editing && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-3">Edit Product</h3>
+            <ProductForm
+              token={token}
+              initial={editing}
+              onSave={handleSave}
+              onCancel={() => setEditing(null)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -266,45 +651,36 @@ function ImportEngine({ token }: { token: string }) {
           </div>
         </div>
 
-        <button
-          onClick={mode === 'id' ? handleImport : handleSearch}
-          disabled={loading || !input.trim()}
-          className="btn-primary w-full"
-        >
+        <button onClick={mode === 'id' ? handleImport : handleSearch} className="btn-primary w-full" disabled={loading}>
           {loading ? 'Processing...' : mode === 'id' ? 'Import Product' : 'Search Products'}
         </button>
       </div>
 
       {/* Search Results */}
-      {searchResults.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="font-semibold text-sm text-white/70">Search Results (US-Shipped Only)</h3>
-          {searchResults.map((product, i) => (
-            <div key={i} className="card p-4 flex items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm line-clamp-1">{String(product.title || '')}</p>
-                <p className="text-xs text-white/50 mt-0.5">
-                  Cost: {formatPrice(Number(product.price || 0))} | Retail: {formatPrice(Number(product.price || 0) * parseFloat(markup))}
-                </p>
+      {mode === 'search' && searchResults.length > 0 && (
+        <div className="grid gap-4">
+          {searchResults.map((product) => (
+            <div key={product.productId as string} className="card p-4 flex flex-col md:flex-row gap-4">
+              <div className="relative w-28 h-28 rounded-xl overflow-hidden bg-white/5">
+                {product.images && (product.images as string[])[0] && (
+                  <Image src={(product.images as string[])[0]} alt="" fill className="object-cover" sizes="112px" />
+                )}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-medium">{product.title as string}</h3>
+                <p className="text-sm text-white/50">{(product.shippingFrom as string) || 'US Shipping'}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+                  <span className="text-brand-light">${(product.price as number).toFixed(2)}</span>
+                  <span className="text-white/30 line-through">${(product.originalPrice as number).toFixed(2)}</span>
+                </div>
               </div>
               <button
                 onClick={async () => {
-                  setLoading(true);
-                  try {
-                    await api.admin.importProduct(token, {
-                      productIdOrUrl: String(product.productId || ''),
-                      brand,
-                      markupMultiplier: parseFloat(markup),
-                      category,
-                    });
-                    toast.success('Product imported!');
-                  } catch {
-                    toast.error('Import failed');
-                  } finally {
-                    setLoading(false);
-                  }
+                  setInput(product.productId as string);
+                  setMode('id');
+                  await handleImport();
                 }}
-                className="btn-primary text-xs px-4 py-2"
+                className="btn-secondary"
               >
                 Import
               </button>
@@ -330,22 +706,17 @@ function OrdersList({ token }: { token: string }) {
     <div className="space-y-3">
       {orders.map((order) => (
         <div key={order._id} className="card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-mono text-sm text-brand-light">{order.orderNumber}</span>
-            <span className={cn(
-              'badge text-[10px]',
-              order.status === 'pending' && 'bg-yellow-500/20 text-yellow-400',
-              order.status === 'processing' && 'bg-blue-500/20 text-blue-400',
-              order.status === 'shipped' && 'bg-green-500/20 text-green-400'
-            )}>
-              {order.status}
-            </span>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">{order.orderNumber}</p>
+              <p className="text-xs text-white/50">{order.customerName}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold">{formatPrice(order.total)}</p>
+              <p className="text-xs text-white/50">{order.status}</p>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-white/70">{order.customerName}</span>
-            <span className="font-semibold">{formatPrice(order.total)}</span>
-          </div>
-          <p className="text-xs text-white/40 mt-1">
+          <p className="text-xs text-white/50 mt-2">
             {order.items.length} item{order.items.length !== 1 ? 's' : ''} | {new Date(order.createdAt).toLocaleDateString()}
           </p>
         </div>
@@ -357,71 +728,179 @@ function OrdersList({ token }: { token: string }) {
   );
 }
 
-export default function AdminPage() {
-  const { token, user, isAuthenticated, logout } = useAuthStore();
-  const [tab, setTab] = useState<Tab>('dashboard');
+function InventoryPanel({ token }: { token: string }) {
+  const [alerts, setAlerts] = useState<Array<{ _id: string; productTitle: string; variantSku: string; currentStock: number; type: string; isResolved: boolean; createdAt: string }>>([]);
+  const [lowStock, setLowStock] = useState<Array<{ productId: string; productTitle: string; variantSku: string; currentStock: number }>>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (!isAuthenticated() || !token) {
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [alertData, lowStockData] = await Promise.all([
+        api.inventory.alerts(token, false),
+        api.inventory.lowStock(token, 5),
+      ]);
+      setAlerts(alertData as typeof alerts);
+      setLowStock(lowStockData as typeof lowStock);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [token]);
+
+  if (loading) return <div className="skeleton h-40 w-full" />;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Low Stock Alerts</h3>
+        <button
+          onClick={async () => {
+            await api.inventory.checkAll(token);
+            toast.success('Inventory check triggered');
+            load();
+          }}
+          className="btn-secondary text-sm"
+        >
+          Run Inventory Check
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {alerts.map((alert) => (
+          <div key={alert._id} className="card p-4">
+            <p className="font-medium">{alert.productTitle}</p>
+            <p className="text-xs text-white/50">Variant: {alert.variantSku}</p>
+            <p className="text-xs text-white/50">Stock: {alert.currentStock}</p>
+            <p className="text-xs text-white/50">Type: {alert.type.replace('_', ' ')}</p>
+          </div>
+        ))}
+        {alerts.length === 0 && (
+          <p className="text-center text-white/50 py-6">No active alerts.</p>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Low Stock Summary</h3>
+        <div className="space-y-3">
+          {lowStock.map((item) => (
+            <div key={`${item.productId}-${item.variantSku}`} className="card p-4">
+              <p className="font-medium">{item.productTitle}</p>
+              <p className="text-xs text-white/50">Variant: {item.variantSku}</p>
+              <p className="text-xs text-white/50">Current stock: {item.currentStock}</p>
+            </div>
+          ))}
+          {lowStock.length === 0 && (
+            <p className="text-center text-white/50 py-6">All products are above the threshold.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminPage() {
+  const searchParams = useSearchParams();
+  const magicToken = searchParams.get('magicToken');
+  const { token, refreshToken, user, setAuth, logout } = useAuthStore();
+  const [tab, setTab] = useState<Tab>('dashboard');
+  const refreshing = useRef(false);
+
+  useEffect(() => {
+    if (!magicToken) return;
+    api.auth
+      .verifyMagicLink(magicToken)
+      .then((res) => {
+        if (res.token && res.refreshToken && res.user) {
+          setAuth(res.token, res.refreshToken, res.user);
+          toast.success('Magic link verified');
+        }
+      })
+      .catch(() => toast.error('Magic link invalid or expired'));
+  }, [magicToken, setAuth]);
+
+  useEffect(() => {
+    if (!refreshToken || refreshing.current) return;
+    refreshing.current = true;
+    api.auth
+      .refresh(refreshToken)
+      .then((res) => {
+        if (res.token && res.refreshToken && res.user) {
+          setAuth(res.token, res.refreshToken, res.user);
+        }
+      })
+      .catch(() => logout())
+      .finally(() => {
+        refreshing.current = false;
+      });
+  }, [refreshToken, setAuth, logout]);
+
+  if (!token || !user) {
     return <LoginForm />;
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'products', label: 'Products' },
-    { id: 'import', label: 'Import' },
-    { id: 'orders', label: 'Orders' },
-  ];
+  const tabs = useMemo(
+    () => [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'products', label: 'Products' },
+      { id: 'import', label: 'Import' },
+      { id: 'orders', label: 'Orders' },
+      { id: 'analytics', label: 'Analytics' },
+      { id: 'inventory', label: 'Inventory' },
+    ],
+    []
+  );
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <FadeIn>
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-display font-bold">Admin Dashboard</h1>
-            <p className="text-sm text-white/50">Welcome back, {user?.name}</p>
+    <div className="min-h-screen py-10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <FadeIn>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-display font-bold">Admin Dashboard</h1>
+              <p className="text-white/50 mt-1">Welcome back, {user.name}</p>
+            </div>
+            <button onClick={logout} className="btn-secondary text-sm">Sign Out</button>
           </div>
-          <button onClick={logout} className="btn-secondary text-sm px-4 py-2">
-            Logout
-          </button>
-        </div>
-      </FadeIn>
+        </FadeIn>
 
-      {/* Tabs */}
-      <FadeIn delay={0.1}>
-        <div className="flex gap-1 mb-8 p-1 bg-white/5 rounded-xl w-fit">
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-2 mb-8">
           {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(t.id as Tab)}
               className={cn(
-                'px-5 py-2 rounded-lg text-sm font-medium transition-all',
-                tab === t.id
-                  ? 'bg-brand text-white shadow-brand'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                'px-4 py-2 rounded-xl text-sm font-medium transition-all',
+                tab === t.id ? 'bg-brand text-white shadow-brand' : 'bg-white/5 text-white/70 hover:bg-white/10'
               )}
             >
               {t.label}
             </button>
           ))}
         </div>
-      </FadeIn>
 
-      {/* Content */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
-          {tab === 'dashboard' && <Dashboard token={token} />}
-          {tab === 'products' && <ProductManager token={token} />}
-          {tab === 'import' && <ImportEngine token={token} />}
-          {tab === 'orders' && <OrdersList token={token} />}
-        </motion.div>
-      </AnimatePresence>
+        {/* Content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            {tab === 'dashboard' && <Dashboard token={token} />}
+            {tab === 'products' && <ProductManager token={token} />}
+            {tab === 'import' && <ImportEngine token={token} />}
+            {tab === 'orders' && <OrdersList token={token} />}
+            {tab === 'analytics' && <AnalyticsPanel token={token} />}
+            {tab === 'inventory' && <InventoryPanel token={token} />}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

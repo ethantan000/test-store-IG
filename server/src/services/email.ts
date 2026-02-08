@@ -174,3 +174,56 @@ export async function sendInventoryAlert(data: {
     console.error('Failed to send inventory alert email:', error);
   }
 }
+
+export async function sendAdminTwoFactorCode(data: { adminEmail: string; code: string }): Promise<void> {
+  const html = `
+    <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#333">
+      <div style="background:#111827;padding:24px;text-align:center">
+        <h1 style="color:#fff;margin:0;font-size:24px">ViralGoods Admin</h1>
+      </div>
+      <div style="padding:24px">
+        <h2>Your verification code</h2>
+        <p>Use this code to finish signing in:</p>
+        <div style="font-size:28px;font-weight:bold;letter-spacing:4px;margin:16px 0">${data.code}</div>
+        <p>This code expires in 10 minutes.</p>
+      </div>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: data.adminEmail,
+      subject: 'Your ViralGoods admin verification code',
+      html,
+    });
+  } catch (error) {
+    console.error('Failed to send admin 2FA code:', error);
+  }
+}
+
+export async function sendAdminMagicLink(data: { adminEmail: string; link: string }): Promise<void> {
+  const html = `
+    <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#333">
+      <div style="background:#111827;padding:24px;text-align:center">
+        <h1 style="color:#fff;margin:0;font-size:24px">ViralGoods Admin</h1>
+      </div>
+      <div style="padding:24px">
+        <h2>Magic login link</h2>
+        <p>Click the link below to sign in. This link expires soon.</p>
+        <p><a href="${data.link}" style="color:#2563eb">Sign in to Admin</a></p>
+      </div>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: data.adminEmail,
+      subject: 'Your ViralGoods admin magic link',
+      html,
+    });
+  } catch (error) {
+    console.error('Failed to send admin magic link:', error);
+  }
+}
