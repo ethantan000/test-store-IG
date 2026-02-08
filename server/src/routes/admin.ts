@@ -44,7 +44,35 @@ router.get('/stats', async (_req: Request, res: Response) => {
       averageMargin: avgMargin[0]?.avgMargin || 0,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch stats' });
+  res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// Analytics summary (order-based)
+router.get('/analytics', async (req: Request, res: Response) => {
+  try {
+    const days = Math.min(60, Math.max(7, parseInt((req.query.days as string) || '14', 10)));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const daily = await Order.aggregate([
+      { $match: { createdAt: { $gte: startDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          orders: { $sum: 1 },
+          revenue: { $sum: '$total' },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    res.json({
+      rangeDays: days,
+      daily,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 });
 
