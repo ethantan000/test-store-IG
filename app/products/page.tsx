@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
 import { FadeIn, StaggerContainer, StaggerItem } from '@/components/ui/MotionDiv';
 import ProductCard from '@/components/product/ProductCard';
 import { ProductGridSkeleton } from '@/components/ui/Skeleton';
-import { api, Product } from '@/lib/api';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
@@ -25,29 +26,25 @@ const SORT_OPTIONS = [
 
 export default function ProductsPage() {
   const searchParams = useSearchParams();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [category, setCategory] = useState(searchParams.get('category') || '');
   const [sortBy, setSortBy] = useState('createdAt:desc');
   const [search, setSearch] = useState(searchParams.get('search') || '');
 
-  useEffect(() => {
-    setLoading(true);
+  const params = useMemo(() => {
     const [sort, order] = sortBy.split(':');
     const params: Record<string, string> = { sort, order, limit: '50' };
     if (category) params.category = category;
     if (search) params.search = search;
-
-    api.products
-      .list(params)
-      .then((res) => {
-        setProducts(res.products);
-        setError('');
-      })
-      .catch(() => setError('Failed to load products'))
-      .finally(() => setLoading(false));
+    return params;
   }, [category, sortBy, search]);
+
+  const { data, error, isLoading } = useSWR(
+    ['products', params],
+    () => api.products.list(params),
+    { keepPreviousData: true, revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+
+  const products = data?.products ?? [];
 
   return (
     <div className="min-h-screen py-8">
@@ -123,11 +120,13 @@ export default function ProductsPage() {
         </FadeIn>
 
         {/* Products Grid */}
-        {loading ? (
+        {isLoading ? (
           <ProductGridSkeleton count={9} />
         ) : error ? (
           <div className="text-center py-20">
-            <p className="text-white/50 text-lg">{error}</p>
+            <p className="text-white/50 text-lg">
+              {error instanceof Error ? error.message : 'Failed to load products'}
+            </p>
             <button onClick={() => window.location.reload()} className="mt-4 btn-secondary">
               Try Again
             </button>

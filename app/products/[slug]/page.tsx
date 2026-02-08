@@ -1,31 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import Link from 'next/link';
 import { FadeIn } from '@/components/ui/MotionDiv';
 import ProductDetail from '@/components/product/ProductDetail';
 import ProductReviews from '@/components/product/ProductReviews';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { api, Product } from '@/lib/api';
+import { api } from '@/lib/api';
 
 interface ProductPageProps {
   params: { slug: string };
 }
 
 export default function ProductPage({ params }: ProductPageProps) {
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { data: product, error, isLoading } = useSWR(
+    params.slug ? ['product', params.slug] : null,
+    () => api.products.get(params.slug),
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
 
-  useEffect(() => {
-    api.products
-      .get(params.slug)
-      .then(setProduct)
-      .catch(() => setError('Product not found'))
-      .finally(() => setLoading(false));
-  }, [params.slug]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
