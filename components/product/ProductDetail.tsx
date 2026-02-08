@@ -8,6 +8,9 @@ import toast from 'react-hot-toast';
 import { Product, ProductVariant } from '@/lib/api';
 import { useCartStore } from '@/store/cart';
 import { formatPrice, getDiscountPercent, cn } from '@/lib/utils';
+import WishlistButton from '@/components/product/WishlistButton';
+import { trackMetaAddToCart } from '@/components/analytics/MetaPixel';
+import { trackEvent } from '@/components/analytics/GoogleAnalytics';
 
 interface ProductDetailProps {
   product: Product;
@@ -35,6 +38,8 @@ export default function ProductDetail({ product }: ProductDetailProps) {
     addItem(product, selectedVariant, quantity);
     openCart();
     toast.success(`${product.title} added to cart!`);
+    trackEvent('add_to_cart', 'ecommerce', product.title, variantPrice);
+    trackMetaAddToCart(product._id, variantPrice, product.title);
 
     // Confetti celebration
     confetti({
@@ -126,9 +131,12 @@ export default function ProductDetail({ product }: ProductDetailProps) {
           <p className="text-sm text-accent-light font-medium uppercase tracking-wider mb-2">
             {product.brand}
           </p>
-          <h1 className="text-3xl lg:text-4xl font-display font-bold text-white">
-            {product.title}
-          </h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl lg:text-4xl font-display font-bold text-white">
+              {product.title}
+            </h1>
+            <WishlistButton productId={product._id} size="lg" className="mt-2 flex-shrink-0" />
+          </div>
 
           {/* Rating */}
           {product.rating > 0 && (

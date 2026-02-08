@@ -12,6 +12,12 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  name: z.string().min(1).max(100),
+});
+
 router.post('/login', validate(loginSchema), async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -41,6 +47,36 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/register', validate(registerSchema), async (req: Request, res: Response) => {
+  try {
+    const { email, password, name } = req.body;
+
+    const existing = await User.findOne({ email });
+    if (existing) {
+      res.status(400).json({ error: 'Email already registered' });
+      return;
+    }
+
+    const user = new User({ email, password, name, role: 'customer' });
+    await user.save();
+
+    const token = generateToken(user._id.toString());
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -4,8 +4,12 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FadeIn } from '@/components/ui/MotionDiv';
 import ProductDetail from '@/components/product/ProductDetail';
+import ReviewList from '@/components/product/ReviewList';
+import ReviewForm from '@/components/product/ReviewForm';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api, Product } from '@/lib/api';
+import { trackMetaViewContent } from '@/components/analytics/MetaPixel';
+import { trackEvent } from '@/components/analytics/GoogleAnalytics';
 
 interface ProductPageProps {
   params: { slug: string };
@@ -15,11 +19,16 @@ export default function ProductPage({ params }: ProductPageProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reviewKey, setReviewKey] = useState(0);
 
   useEffect(() => {
     api.products
       .get(params.slug)
-      .then(setProduct)
+      .then((p) => {
+        setProduct(p);
+        trackEvent('view_item', 'ecommerce', p.title, p.price);
+        trackMetaViewContent(p._id, p.price, p.title);
+      })
       .catch(() => setError('Product not found'))
       .finally(() => setLoading(false));
   }, [params.slug]);
@@ -70,6 +79,24 @@ export default function ProductPage({ params }: ProductPageProps) {
 
       <FadeIn delay={0.1}>
         <ProductDetail product={product} />
+      </FadeIn>
+
+      {/* Reviews Section */}
+      <FadeIn delay={0.2}>
+        <div className="mt-16 pt-12 border-t border-white/5">
+          <h2 className="text-2xl font-display font-bold mb-8">Customer Reviews</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <ReviewList key={reviewKey} productId={product._id} />
+            </div>
+            <div>
+              <ReviewForm
+                productId={product._id}
+                onReviewSubmitted={() => setReviewKey((k) => k + 1)}
+              />
+            </div>
+          </div>
+        </div>
       </FadeIn>
     </div>
   );

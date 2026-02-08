@@ -4,6 +4,8 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/cart/CartDrawer';
 import ToastProvider from '@/components/ui/Toast';
+import GoogleAnalytics from '@/components/analytics/GoogleAnalytics';
+import MetaPixel from '@/components/analytics/MetaPixel';
 
 export const metadata = {
   title: 'ViralGoods - Trending Products for the Modern Lifestyle',
@@ -20,6 +22,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="relative min-h-screen flex flex-col">
+        <GoogleAnalytics />
+        <MetaPixel />
         <CustomCursor />
         <Navbar />
         <CartDrawer />

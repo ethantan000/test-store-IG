@@ -3,18 +3,24 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useCartStore } from '@/store/cart';
 import { api } from '@/lib/api';
-import { formatPrice, generateCartKey } from '@/lib/utils';
+import { formatPrice, generateCartKey, cn } from '@/lib/utils';
 import { FadeIn } from '@/components/ui/MotionDiv';
+import { trackEvent } from '@/components/analytics/GoogleAnalytics';
+import { trackMetaEvent } from '@/components/analytics/MetaPixel';
+
+type PaymentMethod = 'standard' | 'stripe';
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const { items, getSubtotal, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('stripe');
 
   const [form, setForm] = useState({
     customerName: '',
@@ -41,7 +47,10 @@ export default function CheckoutPage() {
 
     setLoading(true);
     try {
-      const order = await api.orders.create({
+      trackEvent('begin_checkout', 'ecommerce', undefined, total);
+      trackMetaEvent('InitiateCheckout', { value: total, currency: 'USD' });
+
+      const result = await api.orders.create({
         items: items.map((item) => ({
           productId: item.productId,
           variantSku: item.variant.sku,
@@ -56,9 +65,16 @@ export default function CheckoutPage() {
           state: form.state,
           zip: form.zip,
         },
+        useStripe: paymentMethod === 'stripe',
       });
 
-      setOrderNumber(order.orderNumber);
+      if (paymentMethod === 'stripe' && result.checkoutUrl) {
+        clearCart();
+        window.location.href = result.checkoutUrl;
+        return;
+      }
+
+      setOrderNumber(result.order.orderNumber);
       setOrderComplete(true);
       clearCart();
       toast.success('Order placed successfully!');
@@ -196,19 +212,86 @@ export default function CheckoutPage() {
               />
             </div>
 
+            {/* Payment Method */}
+            <div className="card p-6 space-y-4">
+              <h2 className="font-display font-bold text-lg">Payment Method</h2>
+              <div className="space-y-3">
+                <label
+                  className={cn(
+                    'flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all',
+                    paymentMethod === 'stripe'
+                      ? 'border-brand bg-brand/10'
+                      : 'border-white/10 hover:border-white/20'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="stripe"
+                    checked={paymentMethod === 'stripe'}
+                    onChange={() => setPaymentMethod('stripe')}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    'w-4 h-4 rounded-full border-2 flex items-center justify-center',
+                    paymentMethod === 'stripe' ? 'border-brand' : 'border-white/30'
+                  )}>
+                    {paymentMethod === 'stripe' && <div className="w-2 h-2 rounded-full bg-brand" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Pay with Stripe</p>
+                    <p className="text-xs text-white/50">Credit card, debit card, Apple Pay, Google Pay</p>
+                  </div>
+                  <svg className="w-8 h-8 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
+                  </svg>
+                </label>
+
+                <label
+                  className={cn(
+                    'flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all',
+                    paymentMethod === 'standard'
+                      ? 'border-brand bg-brand/10'
+                      : 'border-white/10 hover:border-white/20'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="standard"
+                    checked={paymentMethod === 'standard'}
+                    onChange={() => setPaymentMethod('standard')}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    'w-4 h-4 rounded-full border-2 flex items-center justify-center',
+                    paymentMethod === 'standard' ? 'border-brand' : 'border-white/30'
+                  )}>
+                    {paymentMethod === 'standard' && <div className="w-2 h-2 rounded-full bg-brand" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Pay on Delivery</p>
+                    <p className="text-xs text-white/50">Cash on delivery (demo mode)</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
               className="btn-primary w-full text-lg py-4"
             >
               {loading ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   Processing...
                 </span>
+              ) : paymentMethod === 'stripe' ? (
+                `Pay with Stripe - ${formatPrice(total)}`
               ) : (
                 `Place Order - ${formatPrice(total)}`
               )}
