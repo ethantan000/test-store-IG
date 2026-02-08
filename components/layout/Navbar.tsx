@@ -4,12 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cart';
+import { useCustomerStore } from '@/store/customer';
 import { cn } from '@/lib/utils';
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const toggleCart = useCartStore((s) => s.toggleCart);
   const itemCount = useCartStore((s) => s.getItemCount());
+  const customer = useCustomerStore((s) => s.customer);
 
   return (
     <nav className="fixed top-0 inset-x-0 z-40 bg-brand-900/80 backdrop-blur-xl border-b border-white/5">
@@ -38,6 +40,18 @@ export default function Navbar() {
               className="text-sm text-white/70 hover:text-white transition-colors"
             >
               Shop
+            </Link>
+            <Link
+              href="/wishlist"
+              className="text-sm text-white/70 hover:text-white transition-colors"
+            >
+              Wishlist
+            </Link>
+            <Link
+              href="/account"
+              className="text-sm text-white/70 hover:text-white transition-colors"
+            >
+              {customer ? customer.name.split(' ')[0] : 'Account'}
             </Link>
           </div>
 
@@ -110,6 +124,26 @@ export default function Navbar() {
                 )}
               >
                 Shop All
+              </Link>
+              <Link
+                href="/wishlist"
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'block px-4 py-3 rounded-xl text-sm font-medium',
+                  'text-white/70 hover:text-white hover:bg-white/5 transition-all'
+                )}
+              >
+                Wishlist
+              </Link>
+              <Link
+                href="/account"
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'block px-4 py-3 rounded-xl text-sm font-medium',
+                  'text-white/70 hover:text-white hover:bg-white/5 transition-all'
+                )}
+              >
+                {customer ? `Hi, ${customer.name.split(' ')[0]}` : 'Account'}
               </Link>
             </div>
           </motion.div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FadeIn } from '@/components/ui/MotionDiv';
 import ProductDetail from '@/components/product/ProductDetail';
+import ProductReviews from '@/components/product/ProductReviews';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api, Product } from '@/lib/api';
 
@@ -70,6 +71,10 @@ export default function ProductPage({ params }: ProductPageProps) {
 
       <FadeIn delay={0.1}>
         <ProductDetail product={product} />
+      </FadeIn>
+
+      <FadeIn delay={0.2}>
+        <ProductReviews productId={product._id} />
       </FadeIn>
     </div>
   );

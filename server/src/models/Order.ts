@@ -23,6 +23,7 @@ export interface IOrder extends Document {
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   customerEmail: string;
   customerName: string;
+  customerId?: string;
   shippingAddress: {
     line1: string;
     line2?: string;
@@ -33,6 +34,8 @@ export interface IOrder extends Document {
   };
   stripeSessionId?: string;
   stripePaymentIntentId?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,6 +68,7 @@ const OrderSchema = new Schema<IOrder>(
     },
     customerEmail: { type: String, required: true },
     customerName: { type: String, required: true },
+    customerId: { type: String, index: true },
     shippingAddress: {
       line1: { type: String, required: true },
       line2: { type: String },
@@ -75,6 +79,8 @@ const OrderSchema = new Schema<IOrder>(
     },
     stripeSessionId: { type: String },
     stripePaymentIntentId: { type: String },
+    trackingNumber: { type: String },
+    trackingUrl: { type: String },
   },
   { timestamps: true }
 );

@@ -1,20 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCartStore } from '@/store/cart';
+import { useCustomerStore } from '@/store/customer';
 import { api } from '@/lib/api';
 import { formatPrice, generateCartKey } from '@/lib/utils';
 import { FadeIn } from '@/components/ui/MotionDiv';
+import { analytics } from '@/lib/analytics';
 
 export default function CheckoutPage() {
   const { items, getSubtotal, clearCart } = useCartStore();
+  const { token, customer } = useCustomerStore();
   const [loading, setLoading] = useState(false);
-  const [orderComplete, setOrderComplete] = useState(false);
-  const [orderNumber, setOrderNumber] = useState('');
 
   const [form, setForm] = useState({
     customerName: '',
@@ -25,6 +25,17 @@ export default function CheckoutPage() {
     state: '',
     zip: '',
   });
+
+  // Pre-fill form if customer is logged in
+  useEffect(() => {
+    if (customer) {
+      setForm((prev) => ({
+        ...prev,
+        customerName: prev.customerName || customer.name,
+        customerEmail: prev.customerEmail || customer.email,
+      }));
+    }
+  }, [customer]);
 
   const subtotal = getSubtotal();
   const shipping = subtotal >= 50 ? 0 : 5.99;
@@ -40,8 +51,16 @@ export default function CheckoutPage() {
     if (items.length === 0) return;
 
     setLoading(true);
+
+    // Track begin_checkout event
+    analytics.beginCheckout(
+      total,
+      items.map((i) => ({ id: i.productId, name: i.title, price: i.price, quantity: i.quantity }))
+    );
+
     try {
-      const order = await api.orders.create({
+      // Try Stripe checkout first
+      const { url } = await api.checkout.createSession({
         items: items.map((item) => ({
           productId: item.productId,
           variantSku: item.variant.sku,
@@ -49,6 +68,7 @@ export default function CheckoutPage() {
         })),
         customerEmail: form.customerEmail,
         customerName: form.customerName,
+        customerId: customer?.id,
         shippingAddress: {
           line1: form.line1,
           line2: form.line2 || undefined,
@@ -58,43 +78,54 @@ export default function CheckoutPage() {
         },
       });
 
-      setOrderNumber(order.orderNumber);
-      setOrderComplete(true);
-      clearCart();
-      toast.success('Order placed successfully!');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to place order');
+      if (url) {
+        clearCart();
+        window.location.href = url;
+        return;
+      }
+    } catch {
+      // Fallback to direct order if Stripe is not configured
+      try {
+        const order = await api.orders.create({
+          items: items.map((item) => ({
+            productId: item.productId,
+            variantSku: item.variant.sku,
+            quantity: item.quantity,
+          })),
+          customerEmail: form.customerEmail,
+          customerName: form.customerName,
+          customerId: customer?.id,
+          shippingAddress: {
+            line1: form.line1,
+            line2: form.line2 || undefined,
+            city: form.city,
+            state: form.state,
+            zip: form.zip,
+          },
+        });
+
+        analytics.purchase({
+          transactionId: order.orderNumber,
+          value: order.total,
+          items: order.items.map((i) => ({
+            id: i.productId,
+            name: i.title,
+            price: i.price,
+            quantity: i.quantity,
+          })),
+        });
+
+        clearCart();
+        toast.success('Order placed successfully!');
+        window.location.href = `/account`;
+        return;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to place order');
+      }
     } finally {
       setLoading(false);
     }
   };
-
-  if (orderComplete) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <FadeIn>
-          <div className="text-center max-w-md mx-auto px-4">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-500/20 flex items-center justify-center">
-              <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-            </div>
-            <h1 className="text-3xl font-display font-bold mb-2">Order Confirmed!</h1>
-            <p className="text-white/60 mb-2">Thank you for your purchase.</p>
-            <p className="text-sm text-white/40 mb-6">
-              Order number: <span className="text-brand-light font-mono">{orderNumber}</span>
-            </p>
-            <p className="text-sm text-white/50 mb-8">
-              A confirmation email has been sent to {form.customerEmail}.
-            </p>
-            <Link href="/products" className="btn-primary">
-              Continue Shopping
-            </Link>
-          </div>
-        </FadeIn>
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (
@@ -123,6 +154,15 @@ export default function CheckoutPage() {
             {/* Contact */}
             <div className="card p-6 space-y-4">
               <h2 className="font-display font-bold text-lg">Contact Information</h2>
+              {!customer && (
+                <p className="text-xs text-white/40">
+                  Have an account?{' '}
+                  <Link href="/account" className="text-brand-light hover:underline">
+                    Sign in
+                  </Link>{' '}
+                  for faster checkout.
+                </p>
+              )}
               <input
                 type="text"
                 name="customerName"
@@ -202,7 +242,7 @@ export default function CheckoutPage() {
               className="btn-primary w-full text-lg py-4"
             >
               {loading ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -210,9 +250,13 @@ export default function CheckoutPage() {
                   Processing...
                 </span>
               ) : (
-                `Place Order - ${formatPrice(total)}`
+                `Pay with Stripe - ${formatPrice(total)}`
               )}
             </button>
+
+            <p className="text-xs text-center text-white/30">
+              Secure payment powered by Stripe. Your card details are never stored on our servers.
+            </p>
           </form>
         </FadeIn>
 

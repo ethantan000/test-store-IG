@@ -90,6 +90,7 @@ export interface Order {
   status: string;
   customerEmail: string;
   customerName: string;
+  customerId?: string;
   shippingAddress: {
     line1: string;
     line2?: string;
@@ -98,6 +99,8 @@ export interface Order {
     zip: string;
     country: string;
   };
+  trackingNumber?: string;
+  trackingUrl?: string;
   createdAt: string;
 }
 
@@ -108,6 +111,61 @@ export interface AdminStats {
   totalOrders: number;
   totalRevenue: number;
   averageMargin: number;
+}
+
+export interface Review {
+  _id: string;
+  productId: string;
+  customerId: string;
+  customerName: string;
+  rating: number;
+  title: string;
+  body: string;
+  isVerifiedPurchase: boolean;
+  helpful: number;
+  createdAt: string;
+}
+
+export interface ReviewsResponse {
+  reviews: Review[];
+  pagination: { page: number; limit: number; total: number; pages: number };
+  ratingBreakdown: Record<number, number>;
+}
+
+export interface CustomerProfile {
+  _id: string;
+  email: string;
+  name: string;
+  phone?: string;
+  shippingAddresses: {
+    label: string;
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    zip: string;
+    country: string;
+    isDefault: boolean;
+  }[];
+  wishlist: string[];
+  createdAt: string;
+}
+
+export interface CmsContent {
+  _id: string;
+  slug: string;
+  type: string;
+  title: string;
+  body: string;
+  metadata: Record<string, string>;
+  isPublished: boolean;
+  createdAt: string;
+}
+
+export interface ABTestAssignment {
+  testSlug: string;
+  variant: string;
+  config: Record<string, string>;
 }
 
 // Public API
@@ -124,6 +182,7 @@ export const api = {
       items: { productId: string; variantSku: string; quantity: number }[];
       customerEmail: string;
       customerName: string;
+      customerId?: string;
       shippingAddress: {
         line1: string;
         line2?: string;
@@ -138,6 +197,111 @@ export const api = {
         body: JSON.stringify(data),
       }),
     get: (orderNumber: string) => apiFetch<Order>(`/orders/${orderNumber}`),
+  },
+  checkout: {
+    createSession: (data: {
+      items: { productId: string; variantSku: string; quantity: number }[];
+      customerEmail: string;
+      customerName: string;
+      customerId?: string;
+      shippingAddress: {
+        line1: string;
+        line2?: string;
+        city: string;
+        state: string;
+        zip: string;
+        country?: string;
+      };
+    }) =>
+      apiFetch<{ sessionId: string; url: string }>('/checkout/create-session', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    verifySession: (sessionId: string) =>
+      apiFetch<Order>(`/checkout/session/${sessionId}`),
+  },
+  customers: {
+    register: (data: { email: string; password: string; name: string; phone?: string }) =>
+      apiFetch<{ token: string; customer: { id: string; email: string; name: string } }>(
+        '/customers/register',
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+    login: (email: string, password: string) =>
+      apiFetch<{ token: string; customer: { id: string; email: string; name: string } }>(
+        '/customers/login',
+        { method: 'POST', body: JSON.stringify({ email, password }) }
+      ),
+    me: (token: string) => apiFetch<CustomerProfile>('/customers/me', { token }),
+    updateProfile: (token: string, data: { name?: string; phone?: string }) =>
+      apiFetch<CustomerProfile>('/customers/me', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        token,
+      }),
+    addAddress: (
+      token: string,
+      data: {
+        label?: string;
+        line1: string;
+        line2?: string;
+        city: string;
+        state: string;
+        zip: string;
+        isDefault?: boolean;
+      }
+    ) =>
+      apiFetch<CustomerProfile['shippingAddresses']>('/customers/me/addresses', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        token,
+      }),
+    deleteAddress: (token: string, index: number) =>
+      apiFetch<CustomerProfile['shippingAddresses']>(`/customers/me/addresses/${index}`, {
+        method: 'DELETE',
+        token,
+      }),
+    orders: (token: string) => apiFetch<Order[]>('/customers/me/orders', { token }),
+  },
+  reviews: {
+    getForProduct: (productId: string, params?: Record<string, string>) => {
+      const query = params ? '?' + new URLSearchParams(params).toString() : '';
+      return apiFetch<ReviewsResponse>(`/reviews/product/${productId}${query}`);
+    },
+    create: (
+      token: string,
+      data: { productId: string; rating: number; title: string; body: string }
+    ) =>
+      apiFetch<Review>('/reviews', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        token,
+      }),
+    markHelpful: (reviewId: string) =>
+      apiFetch<{ helpful: number }>(`/reviews/${reviewId}/helpful`, { method: 'POST' }),
+  },
+  wishlist: {
+    get: (token: string) => apiFetch<Product[]>('/wishlist', { token }),
+    add: (token: string, productId: string) =>
+      apiFetch<{ message: string; wishlist: string[] }>(`/wishlist/${productId}`, {
+        method: 'POST',
+        token,
+      }),
+    remove: (token: string, productId: string) =>
+      apiFetch<{ message: string; wishlist: string[] }>(`/wishlist/${productId}`, {
+        method: 'DELETE',
+        token,
+      }),
+  },
+  cms: {
+    getBySlug: (slug: string) => apiFetch<CmsContent>(`/cms/${slug}`),
+    getByType: (type: string) => apiFetch<CmsContent[]>(`/cms/type/${type}`),
+  },
+  abtests: {
+    assign: (slug: string) => apiFetch<ABTestAssignment>(`/abtests/assign/${slug}`),
+    convert: (slug: string, variantName: string) =>
+      apiFetch<{ recorded: boolean }>(`/abtests/convert/${slug}/${variantName}`, {
+        method: 'POST',
+      }),
   },
   auth: {
     login: (email: string, password: string) =>

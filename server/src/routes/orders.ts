@@ -3,6 +3,9 @@ import { z } from 'zod';
 import Order from '../models/Order';
 import Product from '../models/Product';
 import { validate } from '../middleware/validate';
+import { requireAuth } from '../middleware/auth';
+import { sendOrderConfirmation, sendShippingUpdate } from '../services/email';
+import { checkInventoryLevels } from '../services/inventory';
 
 const router = Router();
 
@@ -16,6 +19,7 @@ const createOrderSchema = z.object({
   ).min(1),
   customerEmail: z.string().email(),
   customerName: z.string().min(1),
+  customerId: z.string().optional(),
   shippingAddress: z.object({
     line1: z.string().min(1),
     line2: z.string().optional(),
@@ -33,12 +37,11 @@ function generateOrderNumber(): string {
   return `${prefix}-${timestamp}-${random}`;
 }
 
-// Create order (guest checkout)
+// Create order (guest checkout fallback)
 router.post('/', validate(createOrderSchema), async (req: Request, res: Response) => {
   try {
-    const { items, customerEmail, customerName, shippingAddress } = req.body;
+    const { items, customerEmail, customerName, customerId, shippingAddress } = req.body;
 
-    // Validate inventory and build order items
     const orderItems = [];
     let subtotal = 0;
 
@@ -81,6 +84,9 @@ router.post('/', validate(createOrderSchema), async (req: Request, res: Response
       // Decrement stock
       variant.stock -= item.quantity;
       await product.save();
+
+      // Check inventory levels
+      await checkInventoryLevels(product._id.toString());
     }
 
     const shipping = subtotal >= 50 ? 0 : 5.99;
@@ -96,10 +102,24 @@ router.post('/', validate(createOrderSchema), async (req: Request, res: Response
       total,
       customerEmail,
       customerName,
+      customerId,
       shippingAddress,
     });
 
     await order.save();
+
+    // Send order confirmation email (fire and forget)
+    sendOrderConfirmation({
+      orderNumber: order.orderNumber,
+      customerName,
+      customerEmail,
+      items: orderItems,
+      subtotal,
+      shipping,
+      tax,
+      total,
+      shippingAddress,
+    });
 
     res.status(201).json(order);
   } catch (error) {
@@ -119,6 +139,50 @@ router.get('/:orderNumber', async (req: Request, res: Response) => {
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
+// Admin: Update order status (sends shipping update email)
+const updateStatusSchema = z.object({
+  status: z.enum(['pending', 'processing', 'shipped', 'delivered', 'cancelled']),
+  trackingNumber: z.string().optional(),
+  trackingUrl: z.string().url().optional(),
+});
+
+router.patch('/:orderNumber/status', requireAuth, validate(updateStatusSchema), async (req: Request, res: Response) => {
+  try {
+    const { status, trackingNumber, trackingUrl } = req.body;
+
+    const update: Record<string, unknown> = { status };
+    if (trackingNumber) update.trackingNumber = trackingNumber;
+    if (trackingUrl) update.trackingUrl = trackingUrl;
+
+    const order = await Order.findOneAndUpdate(
+      { orderNumber: req.params.orderNumber },
+      update,
+      { new: true }
+    );
+
+    if (!order) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+
+    // Send shipping update email for relevant status changes
+    if (['processing', 'shipped', 'delivered'].includes(status)) {
+      sendShippingUpdate({
+        customerEmail: order.customerEmail,
+        customerName: order.customerName,
+        orderNumber: order.orderNumber,
+        status,
+        trackingNumber,
+        trackingUrl,
+      });
+    }
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update order status' });
   }
 });
 
