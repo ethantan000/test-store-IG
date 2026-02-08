@@ -1,9 +1,11 @@
 import './globals.css';
+import { Suspense } from 'react';
 import CustomCursor from '@/components/CustomCursor';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CartDrawer from '@/components/cart/CartDrawer';
 import ToastProvider from '@/components/ui/Toast';
+import AnalyticsProvider from '@/components/analytics/AnalyticsProvider';
 
 export const metadata = {
   title: 'ViralGoods - Trending Products for the Modern Lifestyle',
@@ -20,6 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="relative min-h-screen flex flex-col">
+        <Suspense fallback={null}>
+          <AnalyticsProvider />
+        </Suspense>
         <CustomCursor />
         <Navbar />
         <CartDrawer />

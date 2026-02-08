@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
-import { Product, ProductVariant } from '@/lib/api';
+import { Product, ProductVariant, api } from '@/lib/api';
 import { useCartStore } from '@/store/cart';
+import { useCustomerStore } from '@/store/customer';
 import { formatPrice, getDiscountPercent, cn } from '@/lib/utils';
+import { analytics } from '@/lib/analytics';
 
 interface ProductDetailProps {
   product: Product;
@@ -17,17 +19,39 @@ export default function ProductDetail({ product }: ProductDetailProps) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant>(product.variants[0]);
   const [quantity, setQuantity] = useState(1);
+  const [inWishlist, setInWishlist] = useState(false);
 
   const addItem = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
+  const { token, customer } = useCustomerStore();
 
   const discount = getDiscountPercent(product.price, product.comparePrice);
   const variantPrice = product.price + (selectedVariant?.priceModifier || 0);
   const inStock = selectedVariant?.stock > 0;
 
-  // Get unique colors and sizes
   const colors = [...new Set(product.variants.map((v) => v.color))];
   const sizes = [...new Set(product.variants.map((v) => v.size))];
+
+  // Track product view
+  useEffect(() => {
+    analytics.viewProduct({
+      id: product._id,
+      name: product.title,
+      price: product.price,
+      category: product.category,
+    });
+  }, [product]);
+
+  // Check if product is in wishlist
+  useEffect(() => {
+    if (!token) return;
+    api.customers
+      .me(token)
+      .then((profile) => {
+        setInWishlist(profile.wishlist.includes(product._id));
+      })
+      .catch(() => {});
+  }, [token, product._id]);
 
   const handleAddToCart = useCallback(() => {
     if (!selectedVariant || !inStock) return;
@@ -36,14 +60,42 @@ export default function ProductDetail({ product }: ProductDetailProps) {
     openCart();
     toast.success(`${product.title} added to cart!`);
 
-    // Confetti celebration
+    analytics.addToCart({
+      id: product._id,
+      name: product.title,
+      price: variantPrice,
+      quantity,
+    });
+
     confetti({
       particleCount: 60,
       spread: 50,
       origin: { y: 0.7 },
       colors: ['#0070f3', '#a855f7', '#6b21a8'],
     });
-  }, [product, selectedVariant, quantity, inStock, addItem, openCart]);
+  }, [product, selectedVariant, quantity, inStock, variantPrice, addItem, openCart]);
+
+  const handleWishlistToggle = async () => {
+    if (!token) {
+      toast.error('Sign in to add to wishlist');
+      return;
+    }
+
+    try {
+      if (inWishlist) {
+        await api.wishlist.remove(token, product._id);
+        setInWishlist(false);
+        toast.success('Removed from wishlist');
+      } else {
+        await api.wishlist.add(token, product._id);
+        setInWishlist(true);
+        toast.success('Added to wishlist');
+        analytics.addToWishlist({ id: product._id, name: product.title, price: product.price });
+      }
+    } catch {
+      toast.error('Failed to update wishlist');
+    }
+  };
 
   const selectColor = (color: string) => {
     const variant = product.variants.find(
@@ -215,7 +267,7 @@ export default function ProductDetail({ product }: ProductDetailProps) {
           </div>
         )}
 
-        {/* Quantity & Add to Cart */}
+        {/* Quantity, Add to Cart, Wishlist */}
         <div className="flex items-center gap-4">
           <div className="flex items-center bg-white/5 rounded-xl border border-white/10">
             <button
@@ -241,6 +293,21 @@ export default function ProductDetail({ product }: ProductDetailProps) {
             className="btn-primary flex-1"
           >
             {inStock ? 'Add to Cart' : 'Sold Out'}
+          </button>
+
+          <button
+            onClick={handleWishlistToggle}
+            className={cn(
+              'p-3 rounded-xl border transition-all',
+              inWishlist
+                ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                : 'bg-white/5 border-white/10 text-white/50 hover:text-white hover:border-white/30'
+            )}
+            aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill={inWishlist ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+            </svg>
           </button>
         </div>
 
