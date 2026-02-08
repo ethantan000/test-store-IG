@@ -6,6 +6,7 @@ export interface IUser extends Document {
   password: string;
   role: 'admin' | 'owner';
   name: string;
+  twoFactorEnabled: boolean;
   createdAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
@@ -16,6 +17,7 @@ const UserSchema = new Schema<IUser>(
     password: { type: String, required: true, minlength: 8 },
     role: { type: String, enum: ['admin', 'owner'], default: 'admin' },
     name: { type: String, required: true },
+    twoFactorEnabled: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

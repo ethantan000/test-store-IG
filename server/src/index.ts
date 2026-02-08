@@ -15,6 +15,8 @@ import wishlistRoutes from './routes/wishlist';
 import cmsRoutes from './routes/cms';
 import abtestRoutes from './routes/abtests';
 import inventoryRoutes from './routes/inventory';
+import uploadRoutes from './routes/uploads';
+import path from 'path';
 
 dotenv.config();
 
@@ -48,6 +50,7 @@ app.use('/api/checkout/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(limiter);
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
 // Routes
 app.use('/api/auth', authLimiter, authRoutes);
@@ -61,6 +64,7 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/cms', cmsRoutes);
 app.use('/api/abtests', abtestRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/uploads', uploadRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

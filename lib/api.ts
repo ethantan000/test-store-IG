@@ -113,6 +113,17 @@ export interface AdminStats {
   averageMargin: number;
 }
 
+export interface AdminAnalyticsDaily {
+  _id: string;
+  orders: number;
+  revenue: number;
+}
+
+export interface AdminAnalytics {
+  rangeDays: number;
+  daily: AdminAnalyticsDaily[];
+}
+
 export interface Review {
   _id: string;
   productId: string;
@@ -160,6 +171,14 @@ export interface CmsContent {
   metadata: Record<string, string>;
   isPublished: boolean;
   createdAt: string;
+}
+
+export interface AdminAuthResponse {
+  token?: string;
+  refreshToken?: string;
+  user?: { id: string; email: string; name: string; role: string };
+  requiresTwoFactor?: boolean;
+  twoFactorToken?: string;
 }
 
 export interface ABTestAssignment {
@@ -305,15 +324,37 @@ export const api = {
   },
   auth: {
     login: (email: string, password: string) =>
-      apiFetch<{ token: string; user: { id: string; email: string; name: string; role: string } }>(
+      apiFetch<AdminAuthResponse>(
         '/auth/login',
         { method: 'POST', body: JSON.stringify({ email, password }) }
       ),
+    verifyTwoFactor: (twoFactorToken: string, code: string) =>
+      apiFetch<AdminAuthResponse>('/auth/verify-2fa', {
+        method: 'POST',
+        body: JSON.stringify({ twoFactorToken, code }),
+      }),
+    refresh: (refreshToken: string) =>
+      apiFetch<AdminAuthResponse>('/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      }),
+    requestMagicLink: (email: string) =>
+      apiFetch<{ sent: boolean }>('/auth/magic-link/request', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    verifyMagicLink: (token: string) =>
+      apiFetch<AdminAuthResponse>('/auth/magic-link/verify', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      }),
     me: (token: string) =>
       apiFetch<{ _id: string; email: string; name: string; role: string }>('/auth/me', { token }),
   },
   admin: {
     stats: (token: string) => apiFetch<AdminStats>('/admin/stats', { token }),
+    analytics: (token: string, days = 14) =>
+      apiFetch<AdminAnalytics>(`/admin/analytics?days=${days}`, { token }),
     products: (token: string) => apiFetch<Product[]>('/admin/products', { token }),
     orders: (token: string) => apiFetch<Order[]>('/admin/orders', { token }),
     importProduct: (
@@ -337,5 +378,17 @@ export const api = {
         `/admin/aliexpress/search?q=${encodeURIComponent(query)}`,
         { token }
       ),
+  },
+  inventory: {
+    alerts: (token: string, resolved?: boolean) => {
+      const query = typeof resolved === 'boolean' ? `?resolved=${resolved}` : '';
+      return apiFetch<unknown[]>(`/inventory/alerts${query}`, { token });
+    },
+    lowStock: (token: string, threshold?: number) => {
+      const query = threshold ? `?threshold=${threshold}` : '';
+      return apiFetch<unknown[]>(`/inventory/low-stock${query}`, { token });
+    },
+    checkAll: (token: string) =>
+      apiFetch<{ message: string }>('/inventory/check-all', { method: 'POST', token }),
   },
 };
